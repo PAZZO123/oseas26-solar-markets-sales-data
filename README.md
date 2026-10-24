@@ -327,10 +327,14 @@ Quick-looks for the slides are saved to `reports/`.
 embedded) for desktop and mobile, published with GitHub Pages
 (<https://pazzo123.github.io/oseas26-solar-markets-sales-data/map.html>):
 
-- **One layer at a time, with its own legend**: the two results (underserved market, solar
-  penetration) and the six clues the model uses (night lights, population, wealth, distance to the
-  grid, travel time, built-up area). Legends are in real units; the top-10 priority pins show on
-  the underserved layer.
+- **One layer at a time, with its own legend**: the three results (underserved market, who should
+  serve them, solar penetration) and the six clues the model uses (night lights, population,
+  wealth, distance to the grid, travel time, built-up area). Legends are in real units; the top-10
+  priority pins show on the underserved layer.
+- **Who should serve them**: each sector is coloured by who could bring light to its unlit homes:
+  grid connections (REG/EDCL), a solar market that already works (solar and PAYGo companies), or a
+  solar market that has not arrived (funders). The thresholds are in `config.yml`
+  (`webmap.routes`). Every sector card has a section explaining its route.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of
   sectors below it, how homes are lit (census 2022), the model estimate, the three SHAP drivers,
   and a table of every layer for that sector (click a row to switch the map to it).
@@ -352,6 +356,9 @@ The full ranking is in `reports/top_underserved_sectors.csv` and the per-sector 
 `src/solar_markets/webmap_template.html`. After changing the template or the layer wording,
 `python -m solar_markets.webmap --from-map` rebuilds `docs/map.html` around the rasters and sector
 numbers already in it, so it works without `data/processed`.
+
+Who uses the map, what each of them needs, and the gaps we are closing for them are in
+[`docs/user-gaps.md`](docs/user-gaps.md).
 
 ### Limitations
 

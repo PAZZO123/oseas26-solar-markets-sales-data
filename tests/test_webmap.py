@@ -87,14 +87,18 @@ def test_pipeline_from_features_to_map(tmp_path):
 
     ranked = pd.read_csv(reports / "top_underserved_sectors.csv")
     assert ranked["unserved_hh"].is_monotonic_decreasing
+    assert set(ranked["route"]) <= {r["key"] for r in W.ROUTES}
 
     html = (tmp_path / "docs" / "map.html").read_text(encoding="utf-8")
     assert "__MAP_DATA__" not in html and "__TITLE__" not in html
     data = map_data(html)
 
-    # One entry per layer, each with an image, a colour ramp and ticks in its own units.
+    # One entry per layer; raster layers have an image, a colour ramp and ticks in their own units.
     assert [layer["key"] for layer in data["layers"]] == [s["key"] for s in W.LAYERS]
     for layer in data["layers"]:
+        if layer["kind"] == "sectors":
+            assert layer["image"] is None and len(layer["stops"]) == len(W.ROUTES)
+            continue
         assert layer["image"].startswith("data:image/png;base64,")
         assert len(layer["stops"]) == 9 and len(layer["ticks"]) == 3
         values = [t["value"] for t in layer["ticks"]]
@@ -105,12 +109,19 @@ def test_pipeline_from_features_to_map(tmp_path):
     assert len(feats) == 36 and data["n_sectors"] == 36
     for f in feats:
         p = f["properties"]
-        for key in [s["metric"] for s in W.LAYERS] + ["rank", "sector", "district", "pt", "drivers"]:
+        for key in [s["metric"] for s in W.LAYERS] + ["rank", "sector", "district", "pt", "drivers",
+                                                      "route"]:
             assert key in p, key
     assert sorted(f["properties"]["rank"] for f in feats) == list(range(1, 37))
     ranks = {f["properties"]["id"]: f["properties"]["rank"] for f in feats}
     assert [ranks[i] for i in data["top"]] == list(range(1, 11))
     assert data["medians"]["unserved_hh"] is not None
+
+    # Every sector has one delivery route, and the route totals add up to the whole country.
+    assert [r["key"] for r in data["routes"]] == [r["key"] for r in W.ROUTES]
+    assert sum(r["sectors"] for r in data["routes"]) == 36
+    assert sum(r["unserved_hh"] for r in data["routes"]) == pytest.approx(
+        sum(f["properties"]["unserved_hh"] for f in feats), abs=36)
 
     # Starts on the underserved layer and on a basemap that also works from a local file.
     assert data["default_layer"] == "underserved"
@@ -122,22 +133,58 @@ def map_data(html: str) -> dict:
     return W.read_map_data(html)
 
 
+def sector_props(**over) -> dict:
+    p = {"id": 1, "census_grid": 0.2, "census_solar": 0.05, "pred_grid": 0.3, "pred_solar": 0.1,
+         "dist_grid": 3.0, "unserved_hh": 1000.0}
+    return p | over
+
+
+def built_map(layers: list[dict]) -> str:
+    """A map.html as an earlier run (without the derived fields) would have written it."""
+    feats = [{"type": "Feature", "properties": sector_props(id=i), "geometry": None}
+             for i in (1, 2)]
+    return W.render_html({"title": "T", "layers": layers, "n_sectors": 2, "links": {},
+                          "calibration": {"target_share": 0.14},
+                          "sectors": {"type": "FeatureCollection", "features": feats}})
+
+
+RULES = {"grid_share_min": 0.5, "grid_km_max": 1.0, "solar_share_min": None}
+
+
+def test_delivery_routes():
+    props = pd.DataFrame([
+        sector_props(census_grid=0.6),                      # most homes on the grid
+        sector_props(dist_grid=0.5),                        # few on the grid, but lines are close
+        sector_props(census_solar=0.3),                     # solar above the national share
+        sector_props(census_solar=0.14),                    # exactly the national share
+        sector_props(),                                     # little grid, little solar, far away
+        sector_props(census_grid=None, census_solar=None, pred_grid=0.7),   # model fills in
+    ])
+    routes = W.delivery_routes(props, 0.14, RULES)
+    assert routes.tolist() == ["grid", "grid", "solar_grow", "solar_grow", "solar_gap", "grid"]
+    # A configured solar threshold replaces the national share.
+    assert W.delivery_routes(props, 0.14, RULES | {"solar_share_min": 0.35})[2] == "solar_gap"
+
+
 def test_rebuild_from_map_keeps_rasters_and_refreshes_wording():
     layers = [{k: spec[k] for k in W.LAYER_TEXT}
               | {"name": "old wording", "image": "data:image/png;base64," + spec["key"],
                  "stops": ["#000000"] * 9, "ticks": [{"t": 0.0, "value": 0.0, "label": "0"}]}
-              for spec in W.LAYERS]
-    built = W.render_html({"title": "T", "layers": layers, "n_sectors": 0})
+              for spec in W.LAYERS if spec.get("kind") != "sectors"]
 
-    data = W.rebuild_from_map(built)
+    data = W.rebuild_from_map(built_map(layers), CFG)
     assert [layer["name"] for layer in data["layers"]] == [s["name"] for s in W.LAYERS]
-    assert [layer["image"] for layer in data["layers"]] == [layer["image"] for layer in layers]
-    assert W.rebuild_from_map(W.render_html(data)) == data      # rebuilding twice changes nothing
+    rasters = [layer["image"] for layer in data["layers"] if layer["kind"] == "raster"]
+    assert rasters == [layer["image"] for layer in layers]
+    assert [f["properties"]["route"] for f in data["sectors"]["features"]] == ["solar_gap"] * 2
+    assert data["links"] == W.LINKS
+    # Rebuilding the rebuilt page changes nothing.
+    assert W.rebuild_from_map(W.render_html(data), CFG) == data
 
 
-def test_rebuild_from_map_needs_every_layer():
+def test_rebuild_from_map_needs_every_raster_layer():
     with pytest.raises(ValueError, match="full webmap stage"):
-        W.rebuild_from_map(W.render_html({"title": "T", "layers": [], "n_sectors": 0}))
+        W.rebuild_from_map(built_map([]), CFG)
     with pytest.raises(ValueError, match="no map data"):
         W.read_map_data("<html></html>")
 

@@ -49,6 +49,9 @@ FEATURE_LABELS = {
 }
 TOP_N = 10
 TEMPLATE = Path(__file__).with_name("webmap_template.html")
+REPO = "https://github.com/PAZZO123/oseas26-solar-markets-sales-data"
+LINKS = {"repo": REPO, "limitations": f"{REPO}/blob/main/LIMITATIONS.md",
+         "user_gaps": f"{REPO}/blob/main/docs/user-gaps.md"}
 
 # Background maps. Esri's tiles also load when map.html is opened as a local file;
 # OpenStreetMap's servers refuse requests without a website address, so it is not used.
@@ -71,6 +74,14 @@ LAYERS = [
                     "electricity nor solar. Darker = more families without light. This is the "
                     "layer funders act on.",
      "cmap": "magma_r", "log": False, "unit": "households per km²", "format": "int",
+     "metric": "unserved_hh", "metric_label": "households with neither grid nor solar",
+     "higher_is": "more households without light"},
+    {"key": "route", "group": "Results", "name": "Who should serve them", "kind": "sectors",
+     "short": "Grid, a working solar market, or none yet",
+     "description": "Who could bring light to each sector's unlit homes: the grid company where "
+                    "homes are on or near the grid, solar companies where their market already "
+                    "works, and funders where the solar market has not arrived.",
+     "unit": "per sector", "format": "int",
      "metric": "unserved_hh", "metric_label": "households with neither grid nor solar",
      "higher_is": "more households without light"},
     {"key": "penetration", "group": "Results", "name": "Solar penetration",
@@ -125,9 +136,26 @@ LAYERS = [
      "higher_is": "more built-up"},
 ]
 # The fields of a LAYERS entry the page uses; the rest of a page layer is its raster and legend.
+# A layer of kind "sectors" has no raster: the page colours the sector shapes instead.
 LAYER_TEXT = ("key", "group", "name", "short", "description", "unit", "format", "metric",
               "metric_label", "higher_is")
 LAYER_RASTER = ("image", "stops", "ticks")
+
+# Who could bring light to a sector's unlit homes; the rule is delivery_routes() with the
+# thresholds in config.yml (webmap.routes). Colours match the page's grid / solar / neither.
+ROUTES = [
+    {"key": "grid", "name": "Grid connections", "who": "REG / EDCL", "colour": "#2f6690",
+     "description": "Most homes already use the grid, or people live close to a line: connecting "
+                    "the rest is the utility's job."},
+    {"key": "solar_grow", "name": "Solar market working", "who": "Solar and PAYGo companies",
+     "colour": "#e8a33d",
+     "description": "Solar already lights at least the national share of homes: companies sell "
+                    "here and can reach more homes."},
+    {"key": "solar_gap", "name": "Solar market not yet arrived",
+     "who": "Funders: results-based financing, grants, new distributors", "colour": "#8a2846",
+     "description": "Off the grid and little solar: the market has not reached these homes "
+                    "without support."},
+]
 
 
 # ---------------------------------------------------------------- sector summary
@@ -153,6 +181,22 @@ def top_drivers(shap: pd.DataFrame, values: pd.DataFrame, features: list[str], n
             parts.append(f"{level} {FEATURE_LABELS.get(f, f)} ({100 * row[f]:+.1f} pp)")
         out[area_id] = "; ".join(parts)
     return pd.Series(out, name="top_drivers")
+
+
+def delivery_routes(props: pd.DataFrame, national_solar: float, rules: dict) -> pd.Series:
+    """"grid", "solar_grow" or "solar_gap" per sector (see ROUTES).
+
+    A sector is a grid job when at least `grid_share_min` of its homes use the grid or people
+    live within `grid_km_max` of a line on average. Otherwise its solar market is working when
+    the solar share reaches `solar_share_min` (the national share when that is null), and has not
+    arrived below it. Census shares lead; the model's estimate fills in where the census has none.
+    """
+    grid = props["census_grid"].astype(float).fillna(props["pred_grid"])
+    solar = props["census_solar"].astype(float).fillna(props["pred_solar"])
+    solar_min = rules.get("solar_share_min") or national_solar
+    near = (grid >= rules["grid_share_min"]) | (props["dist_grid"] <= rules["grid_km_max"])
+    route = np.where(near, "grid", np.where(solar >= solar_min, "solar_grow", "solar_gap"))
+    return pd.Series(route, index=props.index, name="route")
 
 
 def sector_summary(labels: gpd.GeoDataFrame, solar: np.ndarray, grid_share: np.ndarray,
@@ -288,19 +332,33 @@ def sector_features(summary: gpd.GeoDataFrame, train: pd.DataFrame) -> dict:
     return {"type": "FeatureCollection", "features": feats}
 
 
+def layer_text(spec: dict) -> dict:
+    return {k: spec[k] for k in LAYER_TEXT} | {"kind": spec.get("kind", "raster")}
+
+
+def sector_layer(spec: dict) -> dict:
+    """A layer drawn by colouring sectors: its ramp in the menu is one band per route."""
+    n = len(ROUTES)
+    stops = [f"{r['colour']} {100 * i / n:.0f}% {100 * (i + 1) / n:.0f}%"
+             for i, r in enumerate(ROUTES)]
+    return layer_text(spec) | {"image": None, "stops": stops, "ticks": []}
+
+
 def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
               values: dict[str, np.ndarray], bounds, cal: dict) -> dict:
     pct = tuple(cfg["export"]["normalise_percentiles"])
     layers = []
     for spec in LAYERS:
+        if spec.get("kind") == "sectors":
+            layers.append(sector_layer(spec))
+            continue
         uri, stops, ticks = colourise(values[spec["key"]], spec["cmap"], pct, spec["log"])
         for i, tick in enumerate(ticks):
             label = fmt(tick["value"], spec["format"])
             # Values beyond the end ticks share the end colours.
             prefix = "≥ " if i == 2 else "≤ " if i == 0 and tick["value"] != 0 else ""
             tick["label"] = prefix + label
-        layers.append({k: spec[k] for k in LAYER_TEXT}
-                      | {"image": uri, "stops": stops, "ticks": ticks})
+        layers.append(layer_text(spec) | {"image": uri, "stops": stops, "ticks": ticks})
 
     sectors = sector_features(summary, train)
     props = pd.DataFrame([f["properties"] for f in sectors["features"]])
@@ -309,7 +367,7 @@ def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
                 "built")}
     top = props.sort_values("rank").head(TOP_N)["id"].tolist()
     country = cfg["country"]
-    return {
+    data = {
         "title": f"Underserved Solar Markets · {country['name']}",
         "country": country["name"], "year": cfg["reference_year"],
         "bounds": [[bounds.bottom, bounds.left], [bounds.top, bounds.right]],
@@ -320,9 +378,33 @@ def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
                    "households": _num(props["households"].sum(), 0)},
         "calibration": {"target_share": cal.get("target_share"),
                         "source": cal.get("target_source")},
-        "links": {"repo": "https://github.com/PAZZO123/oseas26-solar-markets-sales-data",
-                  "limitations": "https://github.com/PAZZO123/oseas26-solar-markets-sales-data/blob/main/LIMITATIONS.md"},
+        "links": LINKS,
     }
+    return add_user_fields(data, cfg)
+
+
+def add_user_fields(data: dict, cfg: dict) -> dict:
+    """What the page derives from the sector numbers: each sector's delivery route and the
+    route totals.
+
+    Both the full run and --from-map call it, so both build the same page; running it again
+    gives the same result.
+    """
+    feats = data["sectors"]["features"]
+    props = pd.DataFrame([f["properties"] for f in feats])
+    rules = cfg["webmap"]["routes"]
+    national = data["calibration"]["target_share"]
+    for f, route in zip(feats, delivery_routes(props, national, rules)):
+        f["properties"]["route"] = route
+    props["route"] = [f["properties"]["route"] for f in feats]
+    data["routes"] = [r | {"sectors": int((props["route"] == r["key"]).sum()),
+                           "unserved_hh": _num(props.loc[props["route"] == r["key"],
+                                                         "unserved_hh"].sum(), 0)}
+                      for r in ROUTES]
+    data["route_rules"] = {"grid_share_min": rules["grid_share_min"],
+                           "grid_km_max": rules["grid_km_max"],
+                           "solar_share_min": _num(rules.get("solar_share_min") or national)}
+    return data
 
 
 def render_html(data: dict) -> str:
@@ -340,19 +422,23 @@ def read_map_data(html: str) -> dict:
     return json.loads(m.group(1))
 
 
-def rebuild_from_map(html: str) -> dict:
-    """Page data of a built map.html, with the layer wording refreshed from LAYERS.
+def rebuild_from_map(html: str, cfg: dict) -> dict:
+    """Page data of a built map.html, with the layer wording and derived fields refreshed.
 
-    Each layer keeps the raster, colours and ticks it was built with, so this needs no data.
+    Each raster layer keeps the image, colours and ticks it was built with, and add_user_fields
+    works from the sector numbers already in the page, so this needs no data.
     """
     data = read_map_data(html)
     built = {layer["key"]: layer for layer in data["layers"]}
-    missing = [spec["key"] for spec in LAYERS if spec["key"] not in built]
+    rasters = [spec for spec in LAYERS if spec.get("kind") != "sectors"]
+    missing = [spec["key"] for spec in rasters if spec["key"] not in built]
     if missing:
         raise ValueError(f"layers {missing} are not in this map yet; run the full webmap stage")
-    data["layers"] = [{k: spec[k] for k in LAYER_TEXT}
-                      | {k: built[spec["key"]][k] for k in LAYER_RASTER} for spec in LAYERS]
-    return data
+    data["layers"] = [sector_layer(spec) if spec.get("kind") == "sectors" else
+                      layer_text(spec) | {k: built[spec["key"]][k] for k in LAYER_RASTER}
+                      for spec in LAYERS]
+    data["links"] = LINKS
+    return add_user_fields(data, cfg)
 
 
 def write_page(out: Path, data: dict) -> None:
@@ -387,23 +473,25 @@ def run(cfg: dict) -> None:
 
     summary = sector_summary(gpd.read_file(paths.processed / "labels.gpkg"), solar, grid_share,
                              households, grid, drivers, pop=stack["pop"])
-    summary.to_file(paths.processed / "sector_summary.gpkg", driver="GPKG")
-    ranked = summary.sort_values("rank_unserved").drop(columns="geometry")
-    ranked.to_csv(paths.reports / "top_underserved_sectors.csv", index=False)
-
     values = layer_values(stack, solar, grid_share, households, pixel_km2(grid),
                           cfg["export"]["min_population"])
     data = page_data(cfg, summary, train, values, bounds, cal)
+    routes = {f["properties"]["id"]: f["properties"]["route"] for f in data["sectors"]["features"]}
+    summary["route"] = summary["area_id"].map(routes)
+
+    summary.to_file(paths.processed / "sector_summary.gpkg", driver="GPKG")
+    ranked = summary.sort_values("rank_unserved").drop(columns="geometry")
+    ranked.to_csv(paths.reports / "top_underserved_sectors.csv", index=False)
     write_page(paths.docs / "map.html", data)
     print("Top underserved sectors:")
-    print(ranked.head(TOP_N)[["rank_unserved", "sector", "district", "unserved_hh",
+    print(ranked.head(TOP_N)[["rank_unserved", "sector", "district", "unserved_hh", "route",
                               "top_drivers"]].to_string(index=False))
 
 
 def rebuild(cfg: dict) -> None:
     """Re-render docs/map.html around the data the last full run embedded in it."""
     out = get_paths(cfg).docs / "map.html"
-    write_page(out, rebuild_from_map(out.read_text(encoding="utf-8")))
+    write_page(out, rebuild_from_map(out.read_text(encoding="utf-8"), cfg))
 
 
 def main() -> None:
