@@ -144,14 +144,16 @@ LAYER_RASTER = ("image", "stops", "ticks")
 # Who could bring light to a sector's unlit homes; the rule is delivery_routes() with the
 # thresholds in config.yml (webmap.routes). Colours match the page's grid / solar / neither.
 ROUTES = [
-    {"key": "grid", "name": "Grid connections", "who": "REG / EDCL", "colour": "#2f6690",
+    {"key": "grid", "name": "Grid connections", "short": "Grid", "who": "REG / EDCL",
+     "colour": "#2f6690",
      "description": "Most homes already use the grid, or people live close to a line: connecting "
                     "the rest is the utility's job."},
-    {"key": "solar_grow", "name": "Solar market working", "who": "Solar and PAYGo companies",
+    {"key": "solar_grow", "name": "Solar market working", "short": "Solar working",
+     "who": "Solar and PAYGo companies",
      "colour": "#e8a33d",
      "description": "Solar already lights at least the national share of homes: companies sell "
                     "here and can reach more homes."},
-    {"key": "solar_gap", "name": "Solar market not yet arrived",
+    {"key": "solar_gap", "name": "Solar market not yet arrived", "short": "Solar not arrived",
      "who": "Funders: results-based financing, grants, new distributors", "colour": "#8a2846",
      "description": "Off the grid and little solar: the market has not reached these homes "
                     "without support."},
@@ -197,6 +199,20 @@ def delivery_routes(props: pd.DataFrame, national_solar: float, rules: dict) -> 
     near = (grid >= rules["grid_share_min"]) | (props["dist_grid"] <= rules["grid_km_max"])
     route = np.where(near, "grid", np.where(solar >= solar_min, "solar_grow", "solar_gap"))
     return pd.Series(route, index=props.index, name="route")
+
+
+def share_ranks(props: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """Share of households with neither grid nor solar per sector, and its rank (1 = highest).
+
+    Ranking by share instead of number lets small, remote sectors where most homes are dark
+    come up; ties go to the sector with more such homes.
+    """
+    share = (props["unserved_hh"] / props["households"].where(props["households"] > 0)).rename(
+        "unserved_share")
+    order = pd.DataFrame({"share": share, "hh": props["unserved_hh"]}).sort_values(
+        ["share", "hh"], ascending=False, na_position="last").index
+    rank = pd.Series(np.arange(1, len(props) + 1), index=order, name="rank_share")
+    return share, rank.reindex(props.index)
 
 
 def sector_summary(labels: gpd.GeoDataFrame, solar: np.ndarray, grid_share: np.ndarray,
@@ -383,9 +399,13 @@ def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
     return add_user_fields(data, cfg)
 
 
+# Sector fields add_user_fields() derives; the full run also writes them to the ranked list.
+DERIVED = ("route", "unserved_share", "rank_share")
+
+
 def add_user_fields(data: dict, cfg: dict) -> dict:
-    """What the page derives from the sector numbers: each sector's delivery route and the
-    route totals.
+    """What the page derives from the sector numbers: each sector's delivery route, its share of
+    homes without light and rank by that share, and the route totals.
 
     Both the full run and --from-map call it, so both build the same page; running it again
     gives the same result.
@@ -394,9 +414,11 @@ def add_user_fields(data: dict, cfg: dict) -> dict:
     props = pd.DataFrame([f["properties"] for f in feats])
     rules = cfg["webmap"]["routes"]
     national = data["calibration"]["target_share"]
-    for f, route in zip(feats, delivery_routes(props, national, rules)):
-        f["properties"]["route"] = route
-    props["route"] = [f["properties"]["route"] for f in feats]
+    props["route"] = delivery_routes(props, national, rules)
+    props["unserved_share"], props["rank_share"] = share_ranks(props)
+    for f, route, share, rank in zip(feats, props["route"], props["unserved_share"],
+                                     props["rank_share"]):
+        f["properties"] |= {"route": route, "unserved_share": _num(share), "rank_share": int(rank)}
     data["routes"] = [r | {"sectors": int((props["route"] == r["key"]).sum()),
                            "unserved_hh": _num(props.loc[props["route"] == r["key"],
                                                          "unserved_hh"].sum(), 0)}
@@ -476,8 +498,9 @@ def run(cfg: dict) -> None:
     values = layer_values(stack, solar, grid_share, households, pixel_km2(grid),
                           cfg["export"]["min_population"])
     data = page_data(cfg, summary, train, values, bounds, cal)
-    routes = {f["properties"]["id"]: f["properties"]["route"] for f in data["sectors"]["features"]}
-    summary["route"] = summary["area_id"].map(routes)
+    derived = pd.DataFrame([f["properties"] for f in data["sectors"]["features"]]).set_index("id")
+    for col in DERIVED:
+        summary[col] = summary["area_id"].map(derived[col])
 
     summary.to_file(paths.processed / "sector_summary.gpkg", driver="GPKG")
     ranked = summary.sort_values("rank_unserved").drop(columns="geometry")

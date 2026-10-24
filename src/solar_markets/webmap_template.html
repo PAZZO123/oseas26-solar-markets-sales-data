@@ -73,12 +73,15 @@
   .seg button { flex: 1; border: 0; background: transparent; padding: 7px; border-radius: 8px; font-size: 14px; }
   .seg button[aria-pressed="true"] { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
-  #toplist { list-style: none; margin: 0; padding: 0; }
+  .field { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 4px; }
+  .select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: 14px; color: var(--ink); }
+  #toplist { list-style: none; margin: 8px 0 0; padding: 0; }
   #toplist li button { display: flex; gap: 10px; width: 100%; align-items: baseline; text-align: left; border: 0; background: transparent; padding: 7px 6px; border-radius: 8px; }
   #toplist li button:hover { background: #f0f2f5; }
   #toplist .n { width: 22px; height: 22px; border-radius: 50%; background: var(--none); color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; align-self: center; }
   #toplist .hh { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
   #toplist .d { color: var(--muted); font-size: 12.5px; }
+  #toplist .d i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
   .about { font-size: 13.5px; color: var(--ink-2); }
   .about a { color: var(--focus); }
   .linkbtn { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 12px; font-size: 14px; }
@@ -265,8 +268,8 @@
     </section>
     <section id="sec-show" aria-labelledby="h-show">
       <h2 id="h-show">On the map</h2>
-      <div class="toggle"><div>Top 10 priority sectors<small>Numbered pins on the underserved layer</small></div>
-        <label class="switch"><input type="checkbox" id="t-top" checked aria-label="Show top 10 priority sectors"><span></span></label></div>
+      <div class="toggle"><div>Priority pins<small>The numbered priority list, on the underserved and route layers</small></div>
+        <label class="switch"><input type="checkbox" id="t-top" checked aria-label="Show the priority list as numbered pins"><span></span></label></div>
       <div class="toggle"><div>Sector borders</div>
         <label class="switch"><input type="checkbox" id="t-borders" checked aria-label="Show sector borders"><span></span></label></div>
       <div class="toggle"><div>Place names</div>
@@ -277,9 +280,15 @@
       <div class="seg" id="basemap-seg" role="group" aria-label="Background map"></div>
     </section>
     <section id="sec-top" aria-labelledby="h-top">
-      <h2 id="h-top">Top 10 priority sectors</h2>
+      <h2 id="h-top">Priority sectors</h2>
+      <div class="seg" id="rank-seg" role="group" aria-label="Rank sectors by">
+        <button data-key="count" aria-pressed="true">Most homes</button>
+        <button data-key="share" aria-pressed="false">Highest share</button>
+      </div>
+      <label class="field" for="route-filter">Who should serve them</label>
+      <select class="select" id="route-filter"></select>
       <ol id="toplist"></ol>
-      <p class="fine">Ranked by estimated households with neither grid nor solar. A shortlist for field checks, not a final decision.</p>
+      <p class="fine" id="top-note"></p>
     </section>
     <section aria-labelledby="h-about">
       <h2 id="h-about">About this map</h2>
@@ -363,10 +372,15 @@
 
   // ---------------------------------------------------------- state
   var LAYERS = {}; D.layers.forEach(function (l) { LAYERS[l.key] = l; });
+  var ROUTES = {}; D.routes.forEach(function (r) { ROUTES[r.key] = r; });
+  var TOP_N = D.top.length || 10;
   var state = { layer: D.default_layer, basemap: D.default_basemap, opacity: 0.8,
-                top: true, borders: true, labels: true, selected: null, you: null };
+                top: true, borders: true, labels: true, selected: null, you: null,
+                rank: "count", route: "all" };   // rank: "count" or "share"; route: "all" or a route key
   var hash = new URLSearchParams(location.hash.replace(/^#/, ""));
   if (LAYERS[hash.get("layer")]) state.layer = hash.get("layer");
+  if (hash.get("rank") === "share") state.rank = "share";
+  if (ROUTES[hash.get("route")]) state.route = hash.get("route");
 
   // ---------------------------------------------------------- map
   var bounds = L.latLngBounds(D.bounds);
@@ -409,15 +423,15 @@
   var firstImage = D.layers.filter(function (l) { return l.image; })[0].image;
   var raster = L.imageOverlay(LAYERS[state.layer].image || firstImage, bounds,
                               { opacity: state.opacity, className: "raster", interactive: false }).addTo(map);
-  var ROUTES = {}; D.routes.forEach(function (r) { ROUTES[r.key] = r; });
 
   // sectors
   var byId = {};
   var SELECTED = { color: "#0b63ce", weight: 3, opacity: 1 };
   var sectorStyle = function (f) {
     var route = LAYERS[state.layer].kind === "sectors" && f && ROUTES[f.properties.route];
+    var faded = route && state.route !== "all" && f.properties.route !== state.route;   // filtered out of the list
     return { color: "#1f2a44", weight: state.borders ? 0.6 : 0, opacity: 0.55, fill: true,
-             fillColor: route ? route.colour : "#000", fillOpacity: route ? 0.85 * state.opacity : 0 };
+             fillColor: route ? route.colour : "#000", fillOpacity: route ? (faded ? 0.2 : 0.85) * state.opacity : 0 };
   };
   function restyle(id) { if (byId[id]) byId[id].setStyle(id === state.selected ? SELECTED : sectorStyle(byId[id].feature)); }
   var sectors = L.geoJSON(D.sectors, {
@@ -434,20 +448,43 @@
   }).addTo(map);
   var props = function (id) { return byId[id] ? byId[id].feature.properties : null; };
 
-  // top-10 pins
+  // priority list (ranked by number or share of homes without light, optionally one route) and its pins
   var topPins = L.layerGroup();
-  D.top.forEach(function (id) {
-    var p = props(id), layer = byId[id];
-    if (!p) return;
-    var ll = p.pt ? L.latLng(p.pt[0], p.pt[1]) : layer.getBounds().getCenter();
-    L.marker(ll, { icon: L.divIcon({ className: "rank-pin", html: "<span>" + p.rank + "</span>", iconSize: [28, 28] }),
-                   title: "#" + p.rank + " " + p.sector + " (" + p.district + ")", keyboard: true, riseOnHover: true })
-      .on("click", function () { select(id, { fly: true }); }).addTo(topPins);
-  });
+  function priorityList() {
+    var key = state.rank === "share" ? "rank_share" : "rank";
+    return allProps.filter(function (p) { return state.route === "all" || p.route === state.route; })
+                   .sort(function (a, b) { return a[key] - b[key]; });
+  }
+  var pinLayer = function () { return state.layer === "underserved" || state.layer === "route"; };
+  var pinsShown = function () { return state.top && pinLayer(); };
   function syncPins() {
-    var on = state.top && state.layer === "underserved";
-    if (on) topPins.addTo(map); else map.removeLayer(topPins);
-    $("t-top").disabled = state.layer !== "underserved";
+    if (pinsShown()) topPins.addTo(map); else map.removeLayer(topPins);
+    $("t-top").disabled = !pinLayer();
+  }
+  function renderTop() {
+    var list = priorityList(), top = list.slice(0, TOP_N), share = state.rank === "share";
+    topPins.clearLayers();
+    top.forEach(function (p, i) {
+      var ll = p.pt ? L.latLng(p.pt[0], p.pt[1]) : byId[p.id].getBounds().getCenter();
+      L.marker(ll, { icon: L.divIcon({ className: "rank-pin", html: "<span>" + (i + 1) + "</span>", iconSize: [28, 28] }),
+                     title: (i + 1) + ". " + p.sector + " (" + p.district + ")", keyboard: true, riseOnHover: true })
+        .on("click", function () { select(p.id, { fly: true }); }).addTo(topPins);
+    });
+    $("toplist").innerHTML = top.map(function (p, i) {
+      var r = ROUTES[p.route];
+      return '<li><button data-id="' + p.id + '"><span class="n">' + (i + 1) + "</span><span><b>" + esc(p.sector) + '</b><br><span class="d">' +
+             esc(p.district) + ' &middot; <i style="background:' + r.colour + '"></i>' + esc(r.short) + '</span></span><span class="hh">' +
+             (share ? fmt(p.unserved_share, "pct") : fmt(p.unserved_hh, "int") + " homes") + "</span></button></li>";
+    }).join("");
+    $("toplist").querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () { if (!pinLayer()) setLayer("underserved"); closeSettings(); select(+b.dataset.id, { fly: true }); });
+    });
+    $("top-note").textContent = (share ? "Ranked by the share of homes with neither grid nor solar, so small, remote sectors come up."
+                                       : "Ranked by the number of homes with neither grid nor solar, so large sectors come first.") +
+      (state.route === "all" ? "" : " Showing " + list.length + " " + ROUTES[state.route].name.toLowerCase() + " sectors.") +
+      " A shortlist for field checks, not a final decision.";
+    $("rank-seg").querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.key === state.rank ? "true" : "false"); });
+    $("route-filter").value = state.route;
   }
 
   // ---------------------------------------------------------- statistics for comparisons
@@ -501,6 +538,7 @@
           return '<li><span class="sw" style="background:' + r.colour + '"></span><b>' + esc(r.name) + '</b><span class="n">' +
                  fmt(r.unserved_hh, "int") + " homes</span><small>" + esc(r.who) + " &middot; " + r.sectors + " sectors</small></li>";
         }).join("") + "</ul>" +
+        (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") +
         '<div class="note">Click a sector to see why it has its colour</div>';
       document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
       return;
@@ -509,14 +547,14 @@
       '<div class="t">' + esc(l.name) + '</div><div class="u">' + esc(l.unit) + " &middot; " + esc(l.short) + "</div>" +
       '<div class="bar" style="background:' + gradient(l.stops) + '"></div>' +
       '<div class="ticks">' + l.ticks.map(function (t) { return "<span>" + esc(t.label) + "</span>"; }).join("") + "</div>" +
-      (state.layer === "underserved" && state.top ? '<div class="note"><span class="pin-key"></span>Numbered pins: top 10 priority sectors</div>' : "") +
+      (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") +
       '<div class="note">Click a sector for its numbers &middot; darker = ' + esc(l.higher_is) + "</div>";
     document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
   }
   function renderChip() {
     var l = LAYERS[state.layer];
     $("chip").innerHTML = '<span class="ramp" style="background:' + gradient(l.stops) + '"></span>' +
-      '<span class="txt">' + esc(l.name) + (state.layer === "underserved" && state.top ? " <small>&middot; top 10 shown</small>" : "") +
+      '<span class="txt">' + esc(l.name) + (pinsShown() ? " <small>&middot; top 10 shown</small>" : "") +
       (state.basemap === "satellite" ? " <small>&middot; satellite</small>" : "") + "</span>";
   }
 
@@ -578,9 +616,9 @@
       '<div class="big">' + fmt(value, l.format) + "</div>" +
       '<div class="lbl">' + esc(l.metric_label) + "</div>" +
       '<div class="cmp">' + compareLine(l, p) + "</div></div>";
-    if (state.layer === "underserved") {
-      head += '<div class="rankline">Priority rank <b>#' + p.rank + "</b> of " + D.n_sectors + " sectors" +
-              (p.census_unserved !== null ? " &middot; census: " + fmt(p.census_unserved, "pct") + " of homes" : "") + "</div>";
+    if (pinLayer()) {
+      head += '<div class="rankline">Priority rank <b>#' + p.rank + "</b> by number of homes, <b>#" + p.rank_share + "</b> by share (" +
+              fmt(p.unserved_share, "pct") + "), of " + D.n_sectors + " sectors</div>";
     } else if (state.layer === "penetration" && p.census_solar !== null) {
       head += '<div class="rankline">Census 2022: <b style="color:var(--ink)">' + fmt(p.census_solar, "pct") + "</b> of homes lit by solar</div>";
     } else if (state.layer === "pop" && p.population !== null) {
@@ -658,7 +696,8 @@
 
   // ---------------------------------------------------------- hash and links
   function writeHash() {
-    var h = "layer=" + state.layer + (state.selected !== null ? "&sector=" + state.selected : "");
+    var h = "layer=" + state.layer + (state.rank !== "count" ? "&rank=" + state.rank : "") +
+            (state.route !== "all" ? "&route=" + state.route : "") + (state.selected !== null ? "&sector=" + state.selected : "");
     try { history.replaceState(null, "", "#" + h); } catch (e) { /* file:// in some browsers */ }
   }
   function copyLink() {
@@ -839,13 +878,12 @@
   }).join("");
   $("basemap-seg").querySelectorAll("button").forEach(function (b) { b.addEventListener("click", function () { setBasemap(b.dataset.key); renderChip(); }); });
 
-  $("toplist").innerHTML = D.top.map(function (id) {
-    var p = props(id);
-    return '<li><button data-id="' + id + '"><span class="n">' + p.rank + "</span><span><b>" + esc(p.sector) + '</b><br><span class="d">' + esc(p.district) + "</span></span>" +
-           '<span class="hh">' + fmt(p.unserved_hh, "int") + " hh</span></button></li>";
+  $("route-filter").innerHTML = '<option value="all">All routes (' + D.n_sectors + " sectors)</option>" + D.routes.map(function (r) {
+    return '<option value="' + r.key + '">' + esc(r.name) + " (" + r.sectors + ")</option>";
   }).join("");
-  $("toplist").querySelectorAll("button").forEach(function (b) {
-    b.addEventListener("click", function () { if (state.layer !== "underserved") setLayer("underserved"); closeSettings(); select(+b.dataset.id, { fly: true }); });
+  $("route-filter").addEventListener("change", function () { state.route = this.value; renderTop(); applyOpacity(); writeHash(); });
+  $("rank-seg").querySelectorAll("button").forEach(function (b) {
+    b.addEventListener("click", function () { state.rank = b.dataset.key; renderTop(); writeHash(); });
   });
 
   $("app-title").textContent = D.title;
@@ -878,7 +916,7 @@
   var STEPS = [
     { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, so support can reach the places the market has missed. This short guide shows you around." },
     { el: function () { return $("legend"); }, title: "Read the colours",
-      text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the top 10 priority sectors." },
+      text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the priority list." },
     { el: function () { return isMobile() ? $("btn-panel") : $("sec-layers"); }, title: "Choose what the map shows",
       text: "Switch between the results (homes without light, who should serve them, solar use) and the six clues the model uses. The legend, pins and details follow your choice." },
     { el: function () { return $("map"); }, box: "center", title: "Tap a sector for details",
@@ -889,7 +927,7 @@
     { el: function () { return isMobile() ? $("chip") : $("sec-top"); },
       title: function () { return isMobile() ? "Your current settings" : "Priority list"; },
       text: function () { return isMobile() ? "This chip shows what the map is set to. Tap it, or the round button at the bottom, to change layers and settings, then go back to the map."
-                                             : "The 10 sectors with the most households without light. Click one to fly to it. Use it as a shortlist for field visits."; } },
+                                             : "The sectors to look at first. Rank them by the number of homes without light or by their share, and keep one route only. Click one to fly to it; use it as a shortlist for field visits."; } },
     { el: function () { return $("btn-help"); }, title: "You're ready", text: "Open this guide again any time with the question-mark button." }
   ];
   var step = 0;
@@ -954,7 +992,7 @@
   mobileQuery.addEventListener("change", function () { closeSettings(); renderChip(); });
 
   // ---------------------------------------------------------- start
-  renderLayerList(); setBasemap(state.basemap); applyOpacity(); renderLegend(); renderChip(); syncPins();
+  renderLayerList(); setBasemap(state.basemap); renderTop(); applyOpacity(); renderLegend(); renderChip(); syncPins();
   initialView(0);
   window.addEventListener("load", function () { if (state.selected === null) { map.invalidateSize(); showRwanda(); } });
   if (!store.get("osm-guide-done")) setTimeout(openTour, 500);

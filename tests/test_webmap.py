@@ -88,6 +88,8 @@ def test_pipeline_from_features_to_map(tmp_path):
     ranked = pd.read_csv(reports / "top_underserved_sectors.csv")
     assert ranked["unserved_hh"].is_monotonic_decreasing
     assert set(ranked["route"]) <= {r["key"] for r in W.ROUTES}
+    assert sorted(ranked["rank_share"]) == list(range(1, 37))
+    assert ranked["unserved_share"].between(0, 1).all()
 
     html = (tmp_path / "docs" / "map.html").read_text(encoding="utf-8")
     assert "__MAP_DATA__" not in html and "__TITLE__" not in html
@@ -110,7 +112,7 @@ def test_pipeline_from_features_to_map(tmp_path):
     for f in feats:
         p = f["properties"]
         for key in [s["metric"] for s in W.LAYERS] + ["rank", "sector", "district", "pt", "drivers",
-                                                      "route"]:
+                                                      "route", "unserved_share", "rank_share"]:
             assert key in p, key
     assert sorted(f["properties"]["rank"] for f in feats) == list(range(1, 37))
     ranks = {f["properties"]["id"]: f["properties"]["rank"] for f in feats}
@@ -135,7 +137,7 @@ def map_data(html: str) -> dict:
 
 def sector_props(**over) -> dict:
     p = {"id": 1, "census_grid": 0.2, "census_solar": 0.05, "pred_grid": 0.3, "pred_solar": 0.1,
-         "dist_grid": 3.0, "unserved_hh": 1000.0}
+         "dist_grid": 3.0, "unserved_hh": 1000.0, "households": 2000.0}
     return p | over
 
 
@@ -164,6 +166,15 @@ def test_delivery_routes():
     assert routes.tolist() == ["grid", "grid", "solar_grow", "solar_grow", "solar_gap", "grid"]
     # A configured solar threshold replaces the national share.
     assert W.delivery_routes(props, 0.14, RULES | {"solar_share_min": 0.35})[2] == "solar_gap"
+
+
+def test_share_ranks_put_the_darkest_share_first_and_break_ties_by_count():
+    props = pd.DataFrame({"unserved_hh": [100.0, 600.0, 300.0, 50.0, 10.0],
+                          "households": [1000.0, 1000.0, 500.0, 0.0, 100.0]})
+    share, rank = W.share_ranks(props)
+    assert share.round(2).tolist()[:3] == [0.1, 0.6, 0.6]
+    assert np.isnan(share[3])                     # no households: no share, ranked last
+    assert rank.tolist() == [3, 1, 2, 5, 4]       # 0.6 tie goes to 600 homes before 300
 
 
 def test_rebuild_from_map_keeps_rasters_and_refreshes_wording():
