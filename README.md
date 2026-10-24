@@ -336,7 +336,9 @@ embedded) for desktop and mobile, published with GitHub Pages
   and a table of every layer for that sector (click a row to switch the map to it).
 - **Search** any of Rwanda's 416 sectors or 30 districts, or coordinates inside Rwanda.
 - **My location** finds the sector you are in and opens its overview (the position stays in the
-  browser).
+  browser). It always answers: "Finding your location…" at once, then the sector, or what to do
+  when location is blocked, unavailable or the page is not secure (a phone opening
+  `http://<computer-IP>:8777` gets no location; use the published https map there).
 - **Guided tour** on the first visit (remembered in the browser; the ? button reopens it).
 - **Mobile**: search at the top, a summary chip of the current settings, the location button near
   the top, a full-screen settings screen with a back button, and a bottom sheet for details.
@@ -347,7 +349,9 @@ embedded) for desktop and mobile, published with GitHub Pages
 
 The full ranking is in `reports/top_underserved_sectors.csv` and the per-sector table in
 `data/processed/sector_summary.gpkg`. The page layout lives in
-`src/solar_markets/webmap_template.html`.
+`src/solar_markets/webmap_template.html`. After changing the template or the layer wording,
+`python -m solar_markets.webmap --from-map` rebuilds `docs/map.html` around the rasters and sector
+numbers already in it, so it works without `data/processed`.
 
 ### Limitations
 
@@ -394,6 +398,7 @@ python -m solar_markets.model      # reports/cv_results.csv, outputs/solar_share
 python -m solar_markets.calibrate  # outputs/solar_share_calibrated.tif
 python -m solar_markets.export     # outputs/rwa_ogs_*.tif + .yml metadata
 python -m solar_markets.webmap     # docs/map.html
+python -m solar_markets.webmap --from-map   # rebuild docs/map.html only (template changes, no data)
 python -m solar_markets.validate   # reports/dhs_validation.* (needs the DHS 2025 file)
 ```
 

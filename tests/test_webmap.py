@@ -119,11 +119,27 @@ def test_pipeline_from_features_to_map(tmp_path):
 
 
 def map_data(html: str) -> dict:
-    import re
+    return W.read_map_data(html)
 
-    m = re.search(r'<script id="map-data" type="application/json">(.*?)</script>', html, re.DOTALL)
-    assert m, "map data block missing"
-    return json.loads(m.group(1))
+
+def test_rebuild_from_map_keeps_rasters_and_refreshes_wording():
+    layers = [{k: spec[k] for k in W.LAYER_TEXT}
+              | {"name": "old wording", "image": "data:image/png;base64," + spec["key"],
+                 "stops": ["#000000"] * 9, "ticks": [{"t": 0.0, "value": 0.0, "label": "0"}]}
+              for spec in W.LAYERS]
+    built = W.render_html({"title": "T", "layers": layers, "n_sectors": 0})
+
+    data = W.rebuild_from_map(built)
+    assert [layer["name"] for layer in data["layers"]] == [s["name"] for s in W.LAYERS]
+    assert [layer["image"] for layer in data["layers"]] == [layer["image"] for layer in layers]
+    assert W.rebuild_from_map(W.render_html(data)) == data      # rebuilding twice changes nothing
+
+
+def test_rebuild_from_map_needs_every_layer():
+    with pytest.raises(ValueError, match="full webmap stage"):
+        W.rebuild_from_map(W.render_html({"title": "T", "layers": [], "n_sectors": 0}))
+    with pytest.raises(ValueError, match="no map data"):
+        W.read_map_data("<html></html>")
 
 
 def test_render_html_keeps_data_inside_its_script_block():

@@ -93,7 +93,8 @@
   #controls button { width: 44px; height: 44px; border: 0; background: #fff; display: grid; place-items: center; color: var(--ink); }
   #controls button:hover { background: #f0f2f5; }
   #controls .group button + button { border-top: 1px solid var(--line); }
-  #btn-locate.busy svg { animation: spin 1s linear infinite; }
+  #btn-locate .busy-icon, #btn-locate.busy .idle-icon { display: none; }
+  #btn-locate.busy .busy-icon { display: block; color: var(--focus); animation: spin .9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ---------- legend ---------- */
@@ -154,8 +155,11 @@
   #chip { display: none; }
 
   /* ---------- toast ---------- */
-  #toast { position: fixed; z-index: 2000; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .2s; max-width: calc(100% - 32px); }
+  #toast { position: fixed; z-index: 2000; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .2s; width: max-content; max-width: min(480px, calc(100% - 32px)); display: flex; align-items: flex-start; gap: 10px; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.show.has-close { pointer-events: auto; }
+  #toast button { border: 0; background: transparent; color: #fff; width: 28px; height: 28px; margin: -4px -8px -4px 0; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  #toast button:hover { background: rgba(255,255,255,.15); }
 
   /* ---------- guided tour ---------- */
   #tour { position: fixed; inset: 0; z-index: 3000; display: none; }
@@ -199,7 +203,9 @@
     #info .handle i { display: block; width: 40px; height: 5px; border-radius: 3px; background: #cfd3db; margin: 0 auto; }
     #info header { top: 0; }
     body.info-open #legend, body.info-open #btn-panel { display: none !important; }
-    #toast { bottom: 96px; }
+    /* under the search box and left of the map buttons, so the details sheet never covers it */
+    #toast { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 10px; right: 66px; width: auto; max-width: none; transform: translateY(-12px); }
+    #toast.show { transform: none; }
     #tour .tcard { left: 12px !important; right: 12px; width: auto; }
     .leaflet-control-attribution { font-size: 9px; }
   }
@@ -279,7 +285,7 @@
     <button id="btn-zoom-out" aria-label="Zoom out"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
   </div>
   <div class="group card">
-    <button id="btn-locate" aria-label="Show my location and my sector"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <button id="btn-locate" aria-label="Show my location and my sector"><svg class="icon idle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><svg class="icon busy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg></button>
     <button id="btn-home" aria-label="Show all of Rwanda"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button id="btn-help" aria-label="Open the guide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg></button>
   </div>
@@ -698,7 +704,11 @@
   }
   function goToPoint(ll, here) {
     var id = sectorAt(ll);
-    if (id === null) { toast("That point is outside Rwanda's sectors. This map covers Rwanda only."); return false; }
+    if (id === null) {
+      toast(here ? "You seem to be outside Rwanda. This map covers Rwanda only; search a sector to explore it."
+                 : "That point is outside Rwanda's sectors. This map covers Rwanda only.", { ms: 9000, close: true });
+      return false;
+    }
     if (state.you) map.removeLayer(state.you);
     state.you = L.marker(ll, { icon: L.divIcon({ className: "", html: '<div class="you"></div>', iconSize: [18, 18] }),
                                title: here ? "Your location" : "Searched point", keyboard: false }).addTo(map);
@@ -706,19 +716,59 @@
     select(id, { fly: false, here: here });
     return true;
   }
-  $("btn-locate").addEventListener("click", function () {
-    var btn = this;
-    if (!navigator.geolocation) { toast("Your browser cannot share its location."); return; }
-    btn.classList.add("busy");
-    navigator.geolocation.getCurrentPosition(function (pos) {
-      btn.classList.remove("busy");
-      goToPoint(L.latLng(pos.coords.latitude, pos.coords.longitude), true);
-    }, function (err) {
-      btn.classList.remove("busy");
-      toast(err.code === 1 ? "Location permission was refused. Allow it in your browser to find your sector."
-            : "Could not find your location. Try again outdoors or search your sector instead.");
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
-  });
+  // The browser's own timeout only starts once permission is given, so a prompt that is missed or
+  // never shown would leave the button spinning in silence; the watchdog below always answers.
+  var LOCATE_WAIT_MS = 20000;
+  var LOCATE_MSG = {
+    insecure: "Location only works on a secure page (https) or on this computer (localhost). On a phone, open the published map, or search your sector instead.",
+    denied: "Location is blocked for this page. Allow it in your browser's site settings (the icon left of the address), then try again. On a Mac, also allow your browser in System Settings > Privacy & Security > Location Services.",
+    unavailable: "Your device could not find its position. Turn on location services (on a Mac: System Settings > Privacy & Security > Location Services), or search your sector instead.",
+    slow: "Finding your location took too long. Try again, or search your sector instead.",
+    noAnswer: "No answer from your browser. Look for a location prompt near the address bar, or search your sector instead."
+  };
+  var locating = null;   // the request in progress
+  function locateDone(req, msg) {
+    req.done = true;
+    clearTimeout(req.timer);
+    if (locating === req) locating = null;
+    $("btn-locate").classList.remove("busy");
+    $("btn-locate").removeAttribute("aria-busy");
+    if (msg) toast(msg, { ms: 12000, close: true }); else hideToast();
+  }
+  function locate() {
+    if (locating) { toast("Still finding your location…", { ms: 0 }); return; }
+    if (!navigator.geolocation) { toast("This browser cannot share its location. Search your sector instead.", { ms: 9000, close: true }); return; }
+    if (!window.isSecureContext) { toast(LOCATE_MSG.insecure, { ms: 12000, close: true }); return; }
+    var req = locating = { done: false, waited: false };
+    $("btn-locate").classList.add("busy");
+    $("btn-locate").setAttribute("aria-busy", "true");
+    toast("Finding your location…", { ms: 0 });
+    req.timer = setTimeout(function () {   // keep listening: a late "allow" still takes you there
+      if (req.done) return;
+      req.waited = true;
+      locateDone(req, LOCATE_MSG.noAnswer);
+      req.done = false;
+    }, LOCATE_WAIT_MS);
+    var ask = function () {
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        if (req.done) return;
+        locateDone(req);
+        goToPoint(L.latLng(pos.coords.latitude, pos.coords.longitude), true);
+      }, function (err) {
+        if (req.done || req.waited) return;
+        locateDone(req, err.code === 1 ? LOCATE_MSG.denied : err.code === 3 ? LOCATE_MSG.slow : LOCATE_MSG.unavailable);
+      }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+    };
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(function (p) {
+        if (req.done || req.waited) return;
+        if (p.state === "denied") locateDone(req, LOCATE_MSG.denied); else ask();
+      }, ask);
+    } else {
+      ask();
+    }
+  }
+  $("btn-locate").addEventListener("click", locate);
 
   // ---------------------------------------------------------- panel, settings, controls
   function openSettings() { if (isMobile()) { document.body.classList.add("settings-open"); $("btn-back").focus(); } else { document.body.classList.remove("panel-collapsed"); } }
@@ -759,11 +809,18 @@
 
   // ---------------------------------------------------------- toast
   var toastTimer;
-  function toast(msg) {
-    var t = $("toast");
-    t.textContent = msg; t.classList.add("show");
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 4200);
+  function toast(msg, opts) {   // opts.ms: how long it stays (0 = until replaced); opts.close: a dismiss button
+    opts = opts || {};
+    var t = $("toast"), ms = opts.ms === undefined ? 4200 : opts.ms;
+    t.innerHTML = "<span>" + esc(msg) + "</span>" + (opts.close ? '<button aria-label="Dismiss message">' +
+      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' : "");
+    t.classList.toggle("has-close", !!opts.close);
+    t.classList.add("show");
+    if (opts.close) t.querySelector("button").addEventListener("click", hideToast);
+    clearTimeout(toastTimer);
+    if (ms) toastTimer = setTimeout(hideToast, ms);
   }
+  function hideToast() { clearTimeout(toastTimer); $("toast").classList.remove("show"); }
 
   // ---------------------------------------------------------- guided tour
   var STEPS = [

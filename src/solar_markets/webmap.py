@@ -9,6 +9,10 @@ Outputs: data/processed/sector_summary.gpkg   labels + predictions + top drivers
 Owner:   D (docs, map & pitch); see Part 12 of the team playbook.
 
     python -m solar_markets.webmap --config config.yml
+    python -m solar_markets.webmap --from-map    # rebuild docs/map.html from the data already in it
+
+`--from-map` needs no data/processed: after a change to the template or the layer wording it
+re-renders the page around the rasters and sector numbers the last full run embedded.
 
 The page is a Leaflet map built from `webmap_template.html`, with every layer, legend and sector
 record embedded as JSON. One layer is shown at a time (results first, then the six clues the
@@ -22,6 +26,7 @@ import base64
 import io
 import json
 import math
+import re
 from html import escape
 from pathlib import Path
 
@@ -119,6 +124,10 @@ LAYERS = [
      "metric": "built", "metric_label": "of land built up where people live",
      "higher_is": "more built-up"},
 ]
+# The fields of a LAYERS entry the page uses; the rest of a page layer is its raster and legend.
+LAYER_TEXT = ("key", "group", "name", "short", "description", "unit", "format", "metric",
+              "metric_label", "higher_is")
+LAYER_RASTER = ("image", "stops", "ticks")
 
 
 # ---------------------------------------------------------------- sector summary
@@ -290,8 +299,7 @@ def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
             # Values beyond the end ticks share the end colours.
             prefix = "≥ " if i == 2 else "≤ " if i == 0 and tick["value"] != 0 else ""
             tick["label"] = prefix + label
-        layers.append({k: spec[k] for k in ("key", "group", "name", "short", "description", "unit",
-                                            "format", "metric", "metric_label", "higher_is")}
+        layers.append({k: spec[k] for k in LAYER_TEXT}
                       | {"image": uri, "stops": stops, "ticks": ticks})
 
     sectors = sector_features(summary, train)
@@ -322,6 +330,35 @@ def render_html(data: dict) -> str:
     payload = payload.replace("</", "<\\/").replace("<!--", "<\\u0021--")   # valid JSON, safe in <script>
     page = TEMPLATE.read_text(encoding="utf-8")
     return page.replace("__TITLE__", escape(data["title"])).replace("__MAP_DATA__", payload)
+
+
+def read_map_data(html: str) -> dict:
+    """The page data embedded in a built map.html (the inverse of render_html)."""
+    m = re.search(r'<script id="map-data" type="application/json">(.*?)</script>', html, re.DOTALL)
+    if not m:
+        raise ValueError("no map data block in this page; was it built by solar_markets.webmap?")
+    return json.loads(m.group(1))
+
+
+def rebuild_from_map(html: str) -> dict:
+    """Page data of a built map.html, with the layer wording refreshed from LAYERS.
+
+    Each layer keeps the raster, colours and ticks it was built with, so this needs no data.
+    """
+    data = read_map_data(html)
+    built = {layer["key"]: layer for layer in data["layers"]}
+    missing = [spec["key"] for spec in LAYERS if spec["key"] not in built]
+    if missing:
+        raise ValueError(f"layers {missing} are not in this map yet; run the full webmap stage")
+    data["layers"] = [{k: spec[k] for k in LAYER_TEXT}
+                      | {k: built[spec["key"]][k] for k in LAYER_RASTER} for spec in LAYERS]
+    return data
+
+
+def write_page(out: Path, data: dict) -> None:
+    out.write_text(render_html(data), encoding="utf-8")
+    print(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {len(data['layers'])} layers, "
+          f"{data['n_sectors']} sectors)")
 
 
 # ---------------------------------------------------------------- pipeline stage
@@ -357,20 +394,28 @@ def run(cfg: dict) -> None:
     values = layer_values(stack, solar, grid_share, households, pixel_km2(grid),
                           cfg["export"]["min_population"])
     data = page_data(cfg, summary, train, values, bounds, cal)
-    out = paths.docs / "map.html"
-    out.write_text(render_html(data), encoding="utf-8")
-    print(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {len(data['layers'])} layers, "
-          f"{data['n_sectors']} sectors)")
+    write_page(paths.docs / "map.html", data)
     print("Top underserved sectors:")
     print(ranked.head(TOP_N)[["rank_unserved", "sector", "district", "unserved_hh",
                               "top_drivers"]].to_string(index=False))
 
 
+def rebuild(cfg: dict) -> None:
+    """Re-render docs/map.html around the data the last full run embedded in it."""
+    out = get_paths(cfg).docs / "map.html"
+    write_page(out, rebuild_from_map(out.read_text(encoding="utf-8")))
+
+
 def main() -> None:
-    args = cli_args(__doc__.splitlines()[0])
+    args = cli_args(__doc__.splitlines()[0],
+                    {"--from-map": "rebuild docs/map.html from the data already in it "
+                                   "(after a template or wording change; needs no data/processed)"})
     cfg = load_config(args.config)
     get_paths(cfg).ensure()
-    run(cfg)
+    if args.from_map:
+        rebuild(cfg)
+    else:
+        run(cfg)
 
 
 if __name__ == "__main__":
