@@ -86,6 +86,11 @@
   .about a { color: var(--focus); }
   .linkbtn { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 12px; font-size: 14px; }
   .linkbtn:hover { background: #f5f6f8; }
+  .linkbtn.wide { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
+  #files { list-style: none; margin: 10px 0 0; padding: 0; }
+  #files li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+  #files li span { display: block; color: var(--muted); font-size: 12.5px; }
+  #files a { color: var(--focus); }
   #btn-panel { position: fixed; z-index: 1000; top: 72px; left: 12px; display: none; align-items: center; gap: 8px; border: 0; padding: 10px 14px; font-weight: 600; }
   body.panel-collapsed #panel { display: none; }
   body.panel-collapsed #btn-panel { display: flex; }
@@ -290,6 +295,16 @@
       <ol id="toplist"></ol>
       <p class="fine" id="top-note"></p>
     </section>
+    <section id="sec-download" aria-labelledby="h-download">
+      <h2 id="h-download">Take the data with you</h2>
+      <button class="linkbtn wide" id="btn-csv">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        <span id="csv-label">Download sectors (CSV)</span>
+      </button>
+      <p class="fine">Every sector in the priority list above, in its order, with its route, ranks, census and model shares, clues and a map link. Opens in Excel.</p>
+      <ul id="files" aria-label="Map layers for GIS and the Energy Access Explorer"></ul>
+      <p class="fine" id="licence"></p>
+    </section>
     <section aria-labelledby="h-about">
       <h2 id="h-about">About this map</h2>
       <div class="about" id="about"></div>
@@ -485,6 +500,7 @@
       " A shortlist for field checks, not a final decision.";
     $("rank-seg").querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.key === state.rank ? "true" : "false"); });
     $("route-filter").value = state.route;
+    $("csv-label").textContent = "Download " + list.length + " sectors (CSV)";
   }
 
   // ---------------------------------------------------------- statistics for comparisons
@@ -897,6 +913,46 @@
     '<a href="' + D.links.user_gaps + '" target="_blank" rel="noopener">Who the map is for</a> &middot; ' +
     '<a href="' + D.links.repo + '" target="_blank" rel="noopener">Code and data sources</a></p>';
 
+  // ---------------------------------------------------------- downloads
+  var CSV_COLUMNS = [   // [column, value for a sector p at position i of the priority list]
+    ["priority", function (p, i) { return i + 1; }], ["sector", "sector"], ["district", "district"],
+    ["route", function (p) { return ROUTES[p.route].name; }], ["who_could_act", function (p) { return ROUTES[p.route].who; }],
+    ["rank_by_number", "rank"], ["rank_by_share", "rank_share"], ["households", "households"],
+    ["homes_without_light", "unserved_hh"], ["share_without_light", "unserved_share"],
+    ["census_grid_share", "census_grid"], ["census_solar_share", "census_solar"], ["census_neither_share", "census_unserved"],
+    ["model_solar_share", "pred_solar"], ["model_grid_share", "pred_grid"], ["km_to_grid", "dist_grid"],
+    ["minutes_to_city", "travel_min"], ["wealth_index", "rwi"], ["night_lights", "ntl"], ["people_per_km2", "density"],
+    ["built_up_share", "built"], ["model_drivers", function (p) { return (p.drivers || []).join("; "); }],
+    ["map_link", function (p) { return location.href.split("#")[0] + "#layer=underserved&sector=" + p.id; }]
+  ];
+  function csvCell(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "number") return isFinite(v) ? String(v) : "";
+    return '"' + String(v).replace(/"/g, '""') + '"';
+  }
+  function downloadCsv() {
+    var list = priorityList();
+    var rows = [CSV_COLUMNS.map(function (c) { return c[0]; }).join(",")].concat(list.map(function (p, i) {
+      return CSV_COLUMNS.map(function (c) { return csvCell(typeof c[1] === "function" ? c[1](p, i) : p[c[1]]); }).join(",");
+    }));
+    var name = "rwanda_priority_sectors_" + (state.rank === "share" ? "by_share" : "by_number") +
+               (state.route === "all" ? "" : "_" + state.route) + ".csv";
+    var a = document.createElement("a");   // a BOM so Excel reads the names as UTF-8
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast("Saved " + list.length + " sectors to " + name);
+  }
+  $("btn-csv").addEventListener("click", downloadCsv);
+  var size = function (bytes) { return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + " MB" : Math.round(bytes / 1e3) + " KB"; };
+  $("files").innerHTML = D.downloads.map(function (f) {
+    return "<li><b>" + esc(f.name) + "</b><span>GeoTIFF, 0-1, ~1 km &middot; " + size(f.bytes) + ' &middot; <a href="' + f.url + '" download>Download</a> &middot; ' +
+           '<a href="' + f.meta_url + '" target="_blank" rel="noopener">Metadata</a></span></li>';
+  }).join("");
+  $("licence").innerHTML = "Licence: <b>CC BY-NC 4.0</b>. Free to use and share with credit, but not for commercial use, because the Meta wealth index it is built on is non-commercial. " +
+    "Companies: ask before using it to plan sales. Cite: " + esc(D.title) + ", OSEAS 2026.";
+
   // ---------------------------------------------------------- toast
   var toastTimer;
   function toast(msg, opts) {   // opts.ms: how long it stays (0 = until replaced); opts.close: a dismiss button
@@ -926,8 +982,8 @@
       text: "Find the sector you are standing in and see its overview. Your browser will ask for permission; your location stays on your device." },
     { el: function () { return isMobile() ? $("chip") : $("sec-top"); },
       title: function () { return isMobile() ? "Your current settings" : "Priority list"; },
-      text: function () { return isMobile() ? "This chip shows what the map is set to. Tap it, or the round button at the bottom, to change layers and settings, then go back to the map."
-                                             : "The sectors to look at first. Rank them by the number of homes without light or by their share, and keep one route only. Click one to fly to it; use it as a shortlist for field visits."; } },
+      text: function () { return isMobile() ? "This chip shows what the map is set to. Tap it, or the round button at the bottom, to change layers, the priority list and downloads, then go back to the map."
+                                             : "The sectors to look at first. Rank them by the number of homes without light or by their share, and keep one route only. Click one to fly to it; use it as a shortlist for field visits, and download it as a spreadsheet below."; } },
     { el: function () { return $("btn-help"); }, title: "You're ready", text: "Open this guide again any time with the question-mark button." }
   ];
   var step = 0;
