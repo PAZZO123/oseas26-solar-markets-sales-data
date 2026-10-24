@@ -1,0 +1,51 @@
+name: Field check
+description: Tell us what you found on the ground in a sector, so the map can be corrected.
+title: "[Field check]: "
+labels:
+  - field-check
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thank you for checking the map on the ground. This issue is public: please leave out
+        names, phone numbers and exact home locations.
+  - type: input
+    id: sector
+    attributes:
+      label: Sector and district
+      placeholder: Ndaro, Ngororero
+    validations:
+      required: true
+  - type: input
+    id: layer
+    attributes:
+      label: Map layer you were looking at
+      placeholder: Who should serve them
+  - type: input
+    id: link
+    attributes:
+      label: Link to the sector on the map
+  - type: textarea
+    id: found
+    attributes:
+      label: What you found
+      description: >-
+        For example how most homes are lit, whether solar companies sell there, or whether the
+        grid has arrived since 2022.
+    validations:
+      required: true
+  - type: input
+    id: when
+    attributes:
+      label: When you checked
+      placeholder: 2026-10-24
+  - type: dropdown
+    id: source
+    attributes:
+      label: How you know
+      options:
+        - I visited
+        - District officials or REG/EDCL
+        - A solar company
+        - A survey or report
+        - Other

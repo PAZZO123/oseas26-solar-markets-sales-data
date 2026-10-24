@@ -341,6 +341,11 @@ embedded) for desktop and mobile, published with GitHub Pages
 - **Take the data with you**: download every sector in the priority list as a CSV that opens in
   Excel (made in the browser, in list order, with a link back to each sector), or the two EAE
   GeoTIFF layers with their metadata. The licence (CC BY-NC 4.0) is stated next to them.
+- **How sure are we**: each sector card says "usual accuracy" or "check on the ground first",
+  with the reason (census and model disagree by more than 15 points, or the district is off by 8 or
+  more; thresholds in `config.yml`, `webmap.confidence`). It also notes that DHS 2025 finds more
+  solar than the 2022 census. "Report a correction" opens a GitHub issue form with the sector
+  filled in, and a switch draws dashed borders on the sectors to check first.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of
   sectors below it, how homes are lit (census 2022), the model estimate, the three SHAP drivers,
   and a table of every layer for that sector (click a row to switch the map to it).
