@@ -107,7 +107,21 @@ keeps the choice, for example `map.html#layer=route&rank=share&route=solar_gap`.
 GeoTIFF layers exist only on GitHub, and the CC BY-NC licence is not shown where a company would
 see it.
 
-**How it will be filled:** coming in `feat/webmap-downloads`.
+**How it is filled** (`feat/webmap-downloads`). A "Take the data with you" section in the panel
+offers:
+
+- **Download N sectors (CSV).** Every sector in the priority list, in its order (not only the top
+  10). Each row has its route, who could act, both ranks, households, census and model shares,
+  the six clues, the model's drivers and a link back to the sector on the map. The file opens in
+  Excel and is named after the choice, e.g. `rwanda_priority_sectors_by_share_solar_gap.csv`.
+  It is made in the browser from the data already on the page, so it always matches what is shown.
+- **The two EAE layers** (GeoTIFF, 0–1, ~1 km), with size and metadata links on GitHub `main`.
+- **The licence, in plain words:** CC BY-NC 4.0, free to use with credit but not for commercial
+  use, because the Meta wealth index it is built on is non-commercial. Companies are asked to
+  check before using it to plan sales.
+
+**Check it.** Choose *Highest share* and *Solar market not yet arrived*, then press "Download 72
+sectors (CSV)". The file has 72 rows in the same order as the list.
 
 ### 4. How sure are we
 

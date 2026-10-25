@@ -338,6 +338,9 @@ embedded) for desktop and mobile, published with GitHub Pages
 - **Priority list**: rank sectors by the number of homes without light or by their share (so
   small, remote sectors come up), and keep one route only. The numbered pins follow the list,
   and the link keeps the choice, e.g. `map.html#layer=route&rank=share&route=solar_gap`.
+- **Take the data with you**: download every sector in the priority list as a CSV that opens in
+  Excel (made in the browser, in list order, with a link back to each sector), or the two EAE
+  GeoTIFF layers with their metadata. The licence (CC BY-NC 4.0) is stated next to them.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of
   sectors below it, how homes are lit (census 2022), the model estimate, the three SHAP drivers,
   and a table of every layer for that sector (click a row to switch the map to it).

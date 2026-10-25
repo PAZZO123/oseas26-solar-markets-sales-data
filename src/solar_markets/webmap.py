@@ -34,6 +34,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+import yaml
 
 from solar_markets.config import cli_args, get_paths, load_config
 from solar_markets.export import normalise, unserved_households
@@ -399,13 +400,26 @@ def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
     return add_user_fields(data, cfg)
 
 
+def layer_downloads(outputs: Path) -> list[dict]:
+    """The EAE layers in outputs/ (each GeoTIFF with its .yml metadata) as links on GitHub main."""
+    out = []
+    for meta in sorted(outputs.glob("*.yml")):
+        info = yaml.safe_load(meta.read_text(encoding="utf-8"))
+        tif = outputs / info["file"]
+        if tif.exists():
+            out.append({"name": info["name"], "file": tif.name, "bytes": tif.stat().st_size,
+                        "url": f"{REPO}/raw/main/outputs/{tif.name}",
+                        "meta_url": f"{REPO}/blob/main/outputs/{meta.name}"})
+    return out
+
+
 # Sector fields add_user_fields() derives; the full run also writes them to the ranked list.
 DERIVED = ("route", "unserved_share", "rank_share")
 
 
 def add_user_fields(data: dict, cfg: dict) -> dict:
     """What the page derives from the sector numbers: each sector's delivery route, its share of
-    homes without light and rank by that share, and the route totals.
+    homes without light and rank by that share, and the route totals; plus the layer downloads.
 
     Both the full run and --from-map call it, so both build the same page; running it again
     gives the same result.
@@ -426,6 +440,7 @@ def add_user_fields(data: dict, cfg: dict) -> dict:
     data["route_rules"] = {"grid_share_min": rules["grid_share_min"],
                            "grid_km_max": rules["grid_km_max"],
                            "solar_share_min": _num(rules.get("solar_share_min") or national)}
+    data["downloads"] = layer_downloads(get_paths(cfg).outputs)
     return data
 
 

@@ -119,6 +119,13 @@ def test_pipeline_from_features_to_map(tmp_path):
     assert [ranks[i] for i in data["top"]] == list(range(1, 11))
     assert data["medians"]["unserved_hh"] is not None
 
+    # The EAE layers export wrote can be downloaded from the page, each with its metadata.
+    exported = sorted(f.name for f in (tmp_path / "outputs").glob("rwa_ogs_*.tif"))
+    assert sorted(d["file"] for d in data["downloads"]) == exported and exported
+    for d in data["downloads"]:
+        assert d["url"].endswith("/raw/main/outputs/" + d["file"]) and d["bytes"] > 0
+        assert d["meta_url"].endswith(".yml")
+
     # Every sector has one delivery route, and the route totals add up to the whole country.
     assert [r["key"] for r in data["routes"]] == [r["key"] for r in W.ROUTES]
     assert sum(r["sectors"] for r in data["routes"]) == 36
@@ -191,6 +198,16 @@ def test_rebuild_from_map_keeps_rasters_and_refreshes_wording():
     assert data["links"] == W.LINKS
     # Rebuilding the rebuilt page changes nothing.
     assert W.rebuild_from_map(W.render_html(data), CFG) == data
+
+
+def test_layer_downloads_skip_metadata_without_its_layer(tmp_path):
+    (tmp_path / "a.yml").write_text("name: Layer A\nfile: a.tif\n")
+    (tmp_path / "a.tif").write_bytes(b"0" * 10)
+    (tmp_path / "b.yml").write_text("name: Layer B\nfile: b.tif\n")     # b.tif missing
+    out = W.layer_downloads(tmp_path)
+    assert [(d["name"], d["bytes"]) for d in out] == [("Layer A", 10)]
+    assert out[0]["url"] == W.REPO + "/raw/main/outputs/a.tif"
+    assert out[0]["meta_url"] == W.REPO + "/blob/main/outputs/a.yml"
 
 
 def test_rebuild_from_map_needs_every_raster_layer():
