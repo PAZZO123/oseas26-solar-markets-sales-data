@@ -420,9 +420,20 @@ def confidence_notes(props: pd.DataFrame, district_errors: pd.Series, rules: dic
         if err is not None and abs(err) >= rules["district_error_pp"]:
             way = "under" if err < 0 else "over"
             notes.append(f"In {r.district} district the model {way}-estimates solar use by "
-                         f"{abs(err):.0f} points on average.")
+                         f"{abs(err):.0f} percentage points on average.")
         out.append(notes)
     return out
+
+
+def model_errors(reports: Path) -> dict[str, float]:
+    """Each target's average model error in percentage points, in districts the model has not
+    seen (blocked cross-validation); the page shows every model share as value ± this error."""
+    path = reports / "cv_results.csv"
+    if not path.exists():
+        return {}
+    cv = pd.read_csv(path)
+    blocked = cv[cv["cv"].str.startswith("blocked") & (cv["model"] == "lightgbm")]
+    return {t: round(float(e), 1) for t, e in zip(blocked["target"], blocked["mae_pp"])}
 
 
 def survey_since(reports: Path) -> dict | None:
@@ -455,8 +466,8 @@ DERIVED = ("route", "unserved_share", "rank_share", "checks")
 def add_user_fields(data: dict, cfg: dict) -> dict:
     """What the page derives from the sector numbers: each sector's delivery route, its share of
     homes without light and rank by that share, reasons to check it on the ground first, and the
-    route totals; plus the layer downloads, the latest survey's national shares and where field
-    corrections go.
+    route totals; plus the layer downloads, the model's errors, the latest survey's national shares
+    and where field corrections go.
 
     Both the full run and --from-map call it, so both build the same page; running it again
     gives the same result.
@@ -485,6 +496,7 @@ def add_user_fields(data: dict, cfg: dict) -> dict:
                            "solar_share_min": _num(rules.get("solar_share_min") or national)}
     data["downloads"] = layer_downloads(paths.outputs)
     data["since"] = survey_since(paths.reports)
+    data["errors_pp"] = model_errors(paths.reports)
     data["confidence"] = dict(cfg["webmap"]["confidence"])
     data["feedback_url"] = cfg["webmap"].get("feedback_url")
     return data

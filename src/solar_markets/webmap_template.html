@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__TITLE__</title>
-<meta name="description" content="Where households in Rwanda have neither grid electricity nor solar: 1 km estimates from the 2022 census and satellite data.">
+<meta name="description" content="Where households in Rwanda have neither grid electricity nor solar, and who could reach them: the grid company, solar companies, or funders where the solar market has not arrived. 1 km estimates from the 2022 census and satellite data.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <style>
@@ -167,6 +167,8 @@
   .route-card .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 4px; }
   .route-card b { display: block; font-size: 15px; }
   .route-card span { font-size: 13px; color: var(--ink-2); }
+  .keys .range { color: var(--muted); font-size: 12px; margin-top: -2px; }
+  .keys .range b { font-weight: 500; }
   .route-why { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 0; }
   .sure { display: inline-block; font-size: 13px; font-weight: 650; border-radius: 99px; padding: 3px 10px; }
   .sure.usual { background: #e7f2ea; color: #1d6b3a; }
@@ -267,7 +269,7 @@
     </button>
     <div style="flex:1">
       <h1 id="app-title"></h1>
-      <p>Where households have neither grid nor solar &middot; 1 km estimates</p>
+      <p>Where households have neither grid nor solar, and who could reach them &middot; 1 km estimates</p>
     </div>
     <button class="iconbtn collapse" id="btn-collapse" aria-label="Hide panel">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18 9 12l6-6"/></svg>
@@ -638,6 +640,20 @@
       '<div class="route-card"><span class="sw" style="background:' + r.colour + '"></span><div><b>' + esc(r.name) + "</b><span>" + esc(r.who) + "</span></div></div>" +
       '<p class="route-why">' + esc(why) + " " + esc(r.description) + "</p></div>";
   }
+  // Model shares are shown with their typical range: the value ± the model's average error in a
+  // district it has not seen (blocked cross-validation, percentage points).
+  function errPP(target) { return D.errors_pp && D.errors_pp[target]; }
+  function shareRange(v, target) {
+    var e = errPP(target);
+    if (!e || v === null || v === undefined) return "";
+    return fmt(Math.max(0, v - e / 100), "pct") + "–" + fmt(Math.min(1, v + e / 100), "pct");
+  }
+  function accuracyText(p) {
+    if (!errPP("solar_share")) return "Estimates from the 2022 census and satellite data are about 8 percentage points off on average.";
+    return "Model shares are usually within ±" + Math.round(errPP("solar_share")) + " percentage points for solar and ±" +
+      Math.round(errPP("grid_share")) + " for grid in a district the model has not seen" +
+      (p ? ", so here solar is likely " + shareRange(p.pred_solar, "solar_share") + " and grid " + shareRange(p.pred_grid, "grid_share") + "." : ".");
+  }
   function sinceText() {
     return D.since ? "Solar has grown since 2022: the " + D.since.survey + " survey finds " + fmt(D.since.solar, "pct") +
       " of homes lit by solar nationally, against " + fmt(D.calibration.target_share, "pct") + " in the census." : "";
@@ -651,9 +667,10 @@
   function sureSection(p) {
     var check = p.checks && p.checks.length > 0;
     return '<div class="sec"><h3>How sure are we</h3>' +
-      '<span class="sure ' + (check ? "check" : "usual") + '">' + (check ? "Check on the ground first" : "Usual accuracy") + "</span>" +
+      '<span class="sure ' + (check ? "check" : "usual") + '">' + (check ? "Check on the ground first" : "Usual accuracy" +
+        (errPP("solar_share") ? ": ±" + Math.round(errPP("solar_share")) + " points" : "")) + "</span>" +
       (check ? '<ul class="checks">' + p.checks.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul>" : "") +
-      '<p class="fine">Estimates from the 2022 census and satellite data are about 8 points off on average. Use them to shortlist places to visit, not as final decisions. ' +
+      '<p class="fine">' + esc(accuracyText(p)) + " Use them to shortlist places to visit, not as final decisions. " +
       esc(sinceText()) + "</p>" +
       '<div class="actions"><button class="linkbtn" id="btn-copy">Copy link to this sector</button>' +
       (D.feedback_url ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(reportUrl(p)) + '">Report a correction</a>' : "") + "</div>" +
@@ -672,7 +689,12 @@
     if (pinLayer()) {
       head += '<div class="rankline">Priority rank <b>#' + p.rank + "</b> by number of homes, <b>#" + p.rank_share + "</b> by share (" +
               fmt(p.unserved_share, "pct") + "), of " + D.n_sectors + " sectors</div>";
-    } else if (state.layer === "penetration" && p.census_solar !== null) {
+    }
+    if (state.layer === "penetration" && errPP("solar_share")) {
+      head += '<div class="rankline">Likely <b style="color:var(--ink)">' + shareRange(p.pred_solar, "solar_share") + "</b> (±" +
+              Math.round(errPP("solar_share")) + " percentage points)</div>";
+    }
+    if (state.layer === "penetration" && p.census_solar !== null) {
       head += '<div class="rankline">Census 2022: <b style="color:var(--ink)">' + fmt(p.census_solar, "pct") + "</b> of homes lit by solar" +
               (D.since ? " &middot; " + esc(D.since.survey) + ": " + fmt(D.since.solar, "pct") + " nationally" : "") + "</div>";
     } else if (state.layer === "pop" && p.population !== null) {
@@ -695,7 +717,11 @@
     }
     var model = '<div class="sec"><h3>Model estimate</h3><div class="keys">' +
       "<div>Solar<b>" + fmt(p.pred_solar, "pct") + "</b></div><div>Grid<b>" + fmt(p.pred_grid, "pct") + "</b></div>" +
-      "<div>Households<b>" + fmt(p.households, "int") + "</b></div><div>Without light<b>" + fmt(p.unserved_hh, "int") + "</b></div></div></div>";
+      (errPP("solar_share") ? '<div class="range">likely<b>' + shareRange(p.pred_solar, "solar_share") + '</b></div><div class="range">likely<b>' +
+        shareRange(p.pred_grid, "grid_share") + "</b></div>" : "") +
+      "<div>Households<b>" + fmt(p.households, "int") + "</b></div><div>Without light<b>" + fmt(p.unserved_hh, "int") + "</b></div></div>" +
+      (errPP("solar_share") ? '<p class="fine">Likely range: the estimate ± the model\'s average error (' + Math.round(errPP("solar_share")) +
+        " percentage points for solar, " + Math.round(errPP("grid_share")) + " for grid).</p>" : "") + "</div>";
 
     var drivers = "";
     if (p.drivers && p.drivers.length) {
@@ -944,7 +970,7 @@
     "This map combines the " + esc(D.country) + " census " + esc(D.year) + " with six satellite and open-data clues to estimate, for every square kilometre, where homes have neither grid electricity nor solar.</p>" +
     "<p>About <b>" + fmt(D.totals.unserved_hh, "int") + "</b> of " + fmt(D.totals.households, "int") + " households had neither in 2022 (model estimate). " +
     "The <i>Who should serve them</i> layer splits them between the grid company, solar companies already selling there, and places the solar market has not reached. " +
-    "Estimates are about 8 percentage points off on average in a district the model has not seen. " + esc(sinceText()) + "</p>" +
+    esc(accuracyText()) + " " + esc(sinceText()) + "</p>" +
     '<p><a href="' + D.links.limitations + '" target="_blank" rel="noopener">What the map cannot see</a> &middot; ' +
     '<a href="' + D.links.user_gaps + '" target="_blank" rel="noopener">Who the map is for</a> &middot; ' +
     '<a href="' + D.links.repo + '" target="_blank" rel="noopener">Code and data sources</a></p>';
@@ -956,7 +982,9 @@
     ["rank_by_number", "rank"], ["rank_by_share", "rank_share"], ["households", "households"],
     ["homes_without_light", "unserved_hh"], ["share_without_light", "unserved_share"],
     ["census_grid_share", "census_grid"], ["census_solar_share", "census_solar"], ["census_neither_share", "census_unserved"],
-    ["model_solar_share", "pred_solar"], ["model_grid_share", "pred_grid"], ["km_to_grid", "dist_grid"],
+    ["model_solar_share", "pred_solar"], ["model_solar_likely_range", function (p) { return shareRange(p.pred_solar, "solar_share"); }],
+    ["model_grid_share", "pred_grid"], ["model_grid_likely_range", function (p) { return shareRange(p.pred_grid, "grid_share"); }],
+    ["km_to_grid", "dist_grid"],
     ["minutes_to_city", "travel_min"], ["wealth_index", "rwi"], ["night_lights", "ntl"], ["people_per_km2", "density"],
     ["built_up_share", "built"], ["model_drivers", function (p) { return (p.drivers || []).join("; "); }],
     ["check_first", function (p) { return p.checks && p.checks.length ? "yes" : "no"; }],
@@ -1008,7 +1036,7 @@
 
   // ---------------------------------------------------------- guided tour
   var STEPS = [
-    { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, so support can reach the places the market has missed. This short guide shows you around." },
+    { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, and who could reach them: the grid company, solar companies already selling there, or funders where the solar market has not arrived. This short guide shows you around." },
     { el: function () { return $("legend"); }, title: "Read the colours",
       text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the priority list." },
     { el: function () { return isMobile() ? $("btn-panel") : $("sec-layers"); }, title: "Choose what the map shows",

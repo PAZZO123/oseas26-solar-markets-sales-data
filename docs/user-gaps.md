@@ -142,6 +142,13 @@ section near the top:
   or when the model is off by 8 points or more in its district (`reports/calibration_districts.csv`).
   That flags 75 sectors: 46 where census and model disagree, and 46 in Nyaruguru, Bugesera and
   Rulindo. Thresholds are in `config.yml` (`webmap.confidence`).
+- **Accuracy in percent:** every model share comes with its likely range, the estimate ± the
+  model's average error in a district it has not seen (8 percentage points for solar, 11 for grid,
+  from `reports/cv_results.csv`). So "20% solar" reads "likely 12%–28%". The ranges also appear
+  in the card's model estimate, on the solar penetration card, in "About this map" and in the
+  CSV (`model_solar_likely_range`, `model_grid_likely_range`). It is not shown as one accuracy
+  score: an 8-point error on a 14% share is more than half the value, so a single "92% accurate"
+  would overstate the map.
 - **Since 2022:** the DHS 2025 survey finds solar in 20% of homes nationally against 14% in the
   census. The note also appears on the solar penetration card and in "About this map".
 - **Report a correction** opens a GitHub issue form (`.github/ISSUE_TEMPLATE/field_check.yml`)

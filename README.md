@@ -179,7 +179,9 @@ We are building the market-reality layer for **Rwanda** at 1 km resolution:
 4. **Calibration:** logit shift so the national total matches a control total (census now,
    GOGLA sales next).
 5. **Outputs:** two EAE-conformant 0-1 rasters (off-grid solar penetration, underserved
-   market) with metadata, a limitations statement and an interactive map.
+   market) with metadata, a limitations statement and an interactive map. The map adds a "who
+   should serve them" layer that sorts every sector into grid connections, a working solar
+   market, or a solar market not yet arrived.
 
 ### Results (midpoint, Rwanda 2022)
 
@@ -343,7 +345,9 @@ embedded) for desktop and mobile, published with GitHub Pages
   GeoTIFF layers with their metadata. The licence (CC BY-NC 4.0) is stated next to them.
 - **How sure are we**: each sector card says "usual accuracy" or "check on the ground first",
   with the reason (census and model disagree by more than 15 points, or the district is off by 8 or
-  more; thresholds in `config.yml`, `webmap.confidence`). It also notes that DHS 2025 finds more
+  more; thresholds in `config.yml`, `webmap.confidence`). Every model share shows its likely range
+  in percent, e.g. "20% solar, likely 12%–28%" (± the blocked cross-validation error: 8 points for
+  solar, 11 for grid). It also notes that DHS 2025 finds more
   solar than the 2022 census. "Report a correction" opens a GitHub issue form with the sector
   filled in, and a switch draws dashed borders on the sectors to check first.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of

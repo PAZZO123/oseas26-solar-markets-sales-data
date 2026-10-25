@@ -130,6 +130,8 @@ def test_pipeline_from_features_to_map(tmp_path):
 
     # No DHS file in this run, so no "since 2022" note; corrections go where config.yml says.
     assert data["since"] is None
+    assert set(data["errors_pp"]) == {"solar_share", "grid_share"}       # from this run's CV
+    assert all(e > 0 for e in data["errors_pp"].values())
     assert data["feedback_url"] == CFG["webmap"]["feedback_url"]
 
     # Every sector has one delivery route, and the route totals add up to the whole country.
@@ -215,9 +217,21 @@ def test_confidence_notes():
     errors = pd.Series({"A": -16.9, "B": 3.0, "C": 8.0})
     notes = W.confidence_notes(props, errors, {"disagree_pp": 15, "district_error_pp": 8})
     assert notes[0] == ["The census says 74% of homes here use solar; the model says 17%.",
-                        "In A district the model under-estimates solar use by 17 points on average."]
+                        ("In A district the model under-estimates solar use by 17 percentage "
+                         "points on average.")]
     assert notes[1] == []
-    assert notes[2] == ["In C district the model over-estimates solar use by 8 points on average."]
+    assert notes[2] == [("In C district the model over-estimates solar use by 8 percentage "
+                         "points on average.")]
+
+
+def test_model_errors_take_lightgbm_in_unseen_districts(tmp_path):
+    assert W.model_errors(tmp_path) == {}
+    pd.DataFrame({"target": ["solar_share", "solar_share", "solar_share", "grid_share"],
+                  "cv": ["random", "blocked by district_code", "blocked by district_code",
+                         "blocked by district_code"],
+                  "model": ["lightgbm", "linear", "lightgbm", "lightgbm"],
+                  "mae_pp": [7.57, 7.93, 7.9997, 11.325]}).to_csv(tmp_path / "cv_results.csv")
+    assert W.model_errors(tmp_path) == {"solar_share": 8.0, "grid_share": 11.3}
 
 
 def test_survey_since(tmp_path):
