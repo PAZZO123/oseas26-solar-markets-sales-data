@@ -400,6 +400,52 @@ def page_data(cfg: dict, summary: gpd.GeoDataFrame, train: pd.DataFrame,
     return add_user_fields(data, cfg)
 
 
+def confidence_notes(props: pd.DataFrame, district_errors: pd.Series, rules: dict
+                     ) -> list[list[str]]:
+    """Plain-language reasons to check each sector on the ground before acting on it.
+
+    A sector gets a note when the census and the model disagree on its solar share by more than
+    `disagree_pp` points, or when the model is off by `district_error_pp` points or more in its
+    district (`district_errors`: model minus census, in points, by district name). No notes means
+    the usual accuracy.
+    """
+    out = []
+    for r in props.itertuples():
+        notes = []
+        census, model = r.census_solar, r.pred_solar
+        if pd.notna(census) and pd.notna(model) and 100 * abs(model - census) > rules["disagree_pp"]:
+            notes.append(f"The census says {census:.0%} of homes here use solar; the model says "
+                         f"{model:.0%}.")
+        err = district_errors.get(r.district)
+        if err is not None and abs(err) >= rules["district_error_pp"]:
+            way = "under" if err < 0 else "over"
+            notes.append(f"In {r.district} district the model {way}-estimates solar use by "
+                         f"{abs(err):.0f} percentage points on average.")
+        out.append(notes)
+    return out
+
+
+def model_errors(reports: Path) -> dict[str, float]:
+    """Each target's average model error in percentage points, in districts the model has not
+    seen (blocked cross-validation); the page shows every model share as value ± this error."""
+    path = reports / "cv_results.csv"
+    if not path.exists():
+        return {}
+    cv = pd.read_csv(path)
+    blocked = cv[cv["cv"].str.startswith("blocked") & (cv["model"] == "lightgbm")]
+    return {t: round(float(e), 1) for t, e in zip(blocked["target"], blocked["mae_pp"])}
+
+
+def survey_since(reports: Path) -> dict | None:
+    """National shares from the latest household survey, to show how far things moved since 2022."""
+    path = reports / "dhs_validation.json"
+    if not path.exists():
+        return None
+    dhs = json.loads(path.read_text(encoding="utf-8"))
+    return {"survey": dhs["survey"], "solar": _num(dhs["national"]["solar"]),
+            "grid": _num(dhs["national"]["grid"]), "none": _num(dhs["national"]["none"])}
+
+
 def layer_downloads(outputs: Path) -> list[dict]:
     """The EAE layers in outputs/ (each GeoTIFF with its .yml metadata) as links on GitHub main."""
     out = []
@@ -414,12 +460,14 @@ def layer_downloads(outputs: Path) -> list[dict]:
 
 
 # Sector fields add_user_fields() derives; the full run also writes them to the ranked list.
-DERIVED = ("route", "unserved_share", "rank_share")
+DERIVED = ("route", "unserved_share", "rank_share", "checks")
 
 
 def add_user_fields(data: dict, cfg: dict) -> dict:
     """What the page derives from the sector numbers: each sector's delivery route, its share of
-    homes without light and rank by that share, and the route totals; plus the layer downloads.
+    homes without light and rank by that share, reasons to check it on the ground first, and the
+    route totals; plus the layer downloads, the model's errors, the latest survey's national shares
+    and where field corrections go.
 
     Both the full run and --from-map call it, so both build the same page; running it again
     gives the same result.
@@ -430,9 +478,15 @@ def add_user_fields(data: dict, cfg: dict) -> dict:
     national = data["calibration"]["target_share"]
     props["route"] = delivery_routes(props, national, rules)
     props["unserved_share"], props["rank_share"] = share_ranks(props)
-    for f, route, share, rank in zip(feats, props["route"], props["unserved_share"],
-                                     props["rank_share"]):
-        f["properties"] |= {"route": route, "unserved_share": _num(share), "rank_share": int(rank)}
+    paths = get_paths(cfg)
+    errors = paths.reports / "calibration_districts.csv"
+    errors = (pd.read_csv(errors).set_index("district")["error_pp"] if errors.exists()
+              else pd.Series(dtype=float))
+    checks = confidence_notes(props, errors, cfg["webmap"]["confidence"])
+    for f, route, share, rank, notes in zip(feats, props["route"], props["unserved_share"],
+                                            props["rank_share"], checks):
+        f["properties"] |= {"route": route, "unserved_share": _num(share), "rank_share": int(rank),
+                            "checks": notes}
     data["routes"] = [r | {"sectors": int((props["route"] == r["key"]).sum()),
                            "unserved_hh": _num(props.loc[props["route"] == r["key"],
                                                          "unserved_hh"].sum(), 0)}
@@ -440,7 +494,11 @@ def add_user_fields(data: dict, cfg: dict) -> dict:
     data["route_rules"] = {"grid_share_min": rules["grid_share_min"],
                            "grid_km_max": rules["grid_km_max"],
                            "solar_share_min": _num(rules.get("solar_share_min") or national)}
-    data["downloads"] = layer_downloads(get_paths(cfg).outputs)
+    data["downloads"] = layer_downloads(paths.outputs)
+    data["since"] = survey_since(paths.reports)
+    data["errors_pp"] = model_errors(paths.reports)
+    data["confidence"] = dict(cfg["webmap"]["confidence"])
+    data["feedback_url"] = cfg["webmap"].get("feedback_url")
     return data
 
 
@@ -516,6 +574,7 @@ def run(cfg: dict) -> None:
     derived = pd.DataFrame([f["properties"] for f in data["sectors"]["features"]]).set_index("id")
     for col in DERIVED:
         summary[col] = summary["area_id"].map(derived[col])
+    summary["checks"] = summary["checks"].map(" ".join)
 
     summary.to_file(paths.processed / "sector_summary.gpkg", driver="GPKG")
     ranked = summary.sort_values("rank_unserved").drop(columns="geometry")

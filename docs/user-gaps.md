@@ -134,7 +134,36 @@ sectors (CSV)". The file has 72 rows in the same order as the list.
 The data is from 2022, while the DHS 2025 survey finds solar in 19.6% of homes against 13.9% in
 the census. Field teams have no way to report what they find.
 
-**How it will be filled:** coming in `feat/webmap-confidence`.
+**How it is filled** (`feat/webmap-confidence`). Every sector card has a "How sure are we"
+section near the top:
+
+- **Usual accuracy**, or **Check on the ground first** with the reasons in plain words. A sector
+  is flagged when the census and the model disagree on its solar share by more than 15 points,
+  or when the model is off by 8 points or more in its district (`reports/calibration_districts.csv`).
+  That flags 75 sectors: 46 where census and model disagree, and 46 in Nyaruguru, Bugesera and
+  Rulindo. Thresholds are in `config.yml` (`webmap.confidence`).
+- **Accuracy in percent:** every model share comes with its likely range, the estimate ± the
+  model's average error in a district it has not seen (8 percentage points for solar, 11 for grid,
+  from `reports/cv_results.csv`). So "20% solar" reads "likely 12%–28%". The ranges also appear
+  in the card's model estimate, on the solar penetration card, in "About this map" and in the
+  CSV (`model_solar_likely_range`, `model_grid_likely_range`). It is not shown as one accuracy
+  score: an 8-point error on a 14% share is more than half the value, so a single "92% accurate"
+  would overstate the map.
+- **Since 2022:** the DHS 2025 survey finds solar in 20% of homes nationally against 14% in the
+  census. The note also appears on the solar penetration card and in "About this map".
+- **Report a correction** opens a GitHub issue form (`.github/ISSUE_TEMPLATE/field_check.yml`)
+  with the sector, layer and map link already filled in. The issue is public and needs a GitHub
+  account, and the form asks people to leave out names and phone numbers.
+
+The "Sectors to check first" switch under "On the map" draws dashed borders on the flagged
+sectors. The downloaded CSV gains `check_first` and `check_notes` columns.
+
+**Before merging:** Issues are switched off on the fork (`PAZZO123/oseas26-solar-markets-sales-data`),
+so the correction link only works once the repository owner turns them on (Settings > General >
+Features > Issues). Until then, set `webmap.feedback_url` to `null` to hide the button.
+
+**Check it.** Open Ruheru (`map.html#layer=penetration&sector=2312`): census 74% solar, model 17%,
+and Nyaruguru is 17 points off. Then turn on "Sectors to check first".
 
 ## Still out of reach
 

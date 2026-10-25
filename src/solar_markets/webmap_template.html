@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__TITLE__</title>
-<meta name="description" content="Where households in Rwanda have neither grid electricity nor solar: 1 km estimates from the 2022 census and satellite data.">
+<meta name="description" content="Where households in Rwanda have neither grid electricity nor solar, and who could reach them: the grid company, solar companies, or funders where the solar market has not arrived. 1 km estimates from the 2022 census and satellite data.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <style>
@@ -167,7 +167,16 @@
   .route-card .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 4px; }
   .route-card b { display: block; font-size: 15px; }
   .route-card span { font-size: 13px; color: var(--ink-2); }
+  .keys .range { color: var(--muted); font-size: 12px; margin-top: -2px; }
+  .keys .range b { font-weight: 500; }
   .route-why { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 0; }
+  .sure { display: inline-block; font-size: 13px; font-weight: 650; border-radius: 99px; padding: 3px 10px; }
+  .sure.usual { background: #e7f2ea; color: #1d6b3a; }
+  .sure.check { background: #fdf1e2; color: #8a4b00; }
+  ul.checks { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
+  ul.checks li { margin: 3px 0; }
+  a.linkbtn { color: var(--ink); text-decoration: none; display: inline-block; }
+  .dash-key { width: 18px; height: 0; border-top: 2px dashed #8a4b00; flex: none; }
 
   /* ---------- mobile summary chip ---------- */
   #chip { display: none; }
@@ -184,11 +193,17 @@
   #tour.show { display: block; }
   #tour .shade { position: absolute; inset: 0; background: rgba(12,20,38,.55); }
   #tour .spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(12,20,38,.55); outline: 3px solid #fff; transition: all .25s; pointer-events: none; }
-  #tour .tcard { position: absolute; width: min(360px, calc(100% - 24px)); padding: 18px 18px 14px; }
+  #tour .tcard { position: absolute; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; padding: 16px 18px 14px; }
+  #tour .progress { margin: 0 0 8px; }
   #tour .tcard h2 { margin: 0 0 6px; font-size: 18px; }
   #tour .tcard p { margin: 0 0 12px; color: var(--ink-2); }
-  #tour .tnav { display: flex; align-items: center; gap: 8px; }
-  #tour .dots { display: flex; gap: 5px; margin-right: auto; }
+  /* buttons wrap rather than spill out of the card on narrow screens */
+  #tour .tnav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  #tour .tnav #tour-skip { margin-right: auto; }
+  #tour .btn { min-height: 40px; }
+  #tour .dots { display: flex; flex-wrap: wrap; gap: 5px; }
+  /* the guide sets an open details card aside so the parts it points at stay visible */
+  body.touring #info { display: none !important; }
   #tour .dots i { width: 7px; height: 7px; border-radius: 50%; background: #d3d7e0; }
   #tour .dots i.on { background: var(--accent); }
   .btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 600; white-space: nowrap; }
@@ -221,10 +236,14 @@
     #info .handle i { display: block; width: 40px; height: 5px; border-radius: 3px; background: #cfd3db; margin: 0 auto; }
     #info header { top: 0; }
     body.info-open #legend, body.info-open #btn-panel { display: none !important; }
+    body.info-open.touring #legend { display: block !important; }
+    body.info-open.touring #btn-panel { display: flex !important; }
     /* under the search box and left of the map buttons, so the details sheet never covers it */
     #toast { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 10px; right: 66px; width: auto; max-width: none; transform: translateY(-12px); }
     #toast.show { transform: none; }
     #tour .tcard { left: 12px !important; right: 12px; width: auto; }
+    #tour .btn { min-height: 44px; }
+    #tour .tnav .primary { flex: 1 1 auto; }   /* a full, easy-to-tap "Next" / "Start exploring" */
     .leaflet-control-attribution { font-size: 9px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -260,7 +279,7 @@
     </button>
     <div style="flex:1">
       <h1 id="app-title"></h1>
-      <p>Where households have neither grid nor solar &middot; 1 km estimates</p>
+      <p>Where households have neither grid nor solar, and who could reach them &middot; 1 km estimates</p>
     </div>
     <button class="iconbtn collapse" id="btn-collapse" aria-label="Hide panel">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18 9 12l6-6"/></svg>
@@ -277,6 +296,8 @@
         <label class="switch"><input type="checkbox" id="t-top" checked aria-label="Show the priority list as numbered pins"><span></span></label></div>
       <div class="toggle"><div>Sector borders</div>
         <label class="switch"><input type="checkbox" id="t-borders" checked aria-label="Show sector borders"><span></span></label></div>
+      <div class="toggle"><div>Sectors to check first<small>Dashed borders where the census and the model disagree, or the district is off</small></div>
+        <label class="switch"><input type="checkbox" id="t-checks" aria-label="Mark sectors to check on the ground first"><span></span></label></div>
       <div class="toggle"><div>Place names</div>
         <label class="switch"><input type="checkbox" id="t-labels" checked aria-label="Show place names"><span></span></label></div>
       <div class="toggle" style="display:block"><div style="display:flex;justify-content:space-between"><span>Layer opacity</span><span id="op-val">80%</span></div>
@@ -335,10 +356,10 @@
   <div class="shade"></div>
   <div class="spot"></div>
   <div class="tcard card">
+    <div class="progress"><div class="dots" aria-hidden="true"></div></div>
     <h2 id="tour-title"></h2>
     <p id="tour-text"></p>
     <div class="tnav">
-      <div class="dots" aria-hidden="true"></div>
       <button class="btn ghost" id="tour-skip">Skip</button>
       <button class="btn ghost" id="tour-back">Back</button>
       <button class="btn primary" id="tour-next">Next</button>
@@ -391,7 +412,7 @@
   var TOP_N = D.top.length || 10;
   var state = { layer: D.default_layer, basemap: D.default_basemap, opacity: 0.8,
                 top: true, borders: true, labels: true, selected: null, you: null,
-                rank: "count", route: "all" };   // rank: "count" or "share"; route: "all" or a route key
+                rank: "count", route: "all", checks: false };   // rank: "count" or "share"; route: "all" or a route key
   var hash = new URLSearchParams(location.hash.replace(/^#/, ""));
   if (LAYERS[hash.get("layer")]) state.layer = hash.get("layer");
   if (hash.get("rank") === "share") state.rank = "share";
@@ -441,11 +462,13 @@
 
   // sectors
   var byId = {};
-  var SELECTED = { color: "#0b63ce", weight: 3, opacity: 1 };
+  var SELECTED = { color: "#0b63ce", weight: 3, opacity: 1, dashArray: null };
   var sectorStyle = function (f) {
     var route = LAYERS[state.layer].kind === "sectors" && f && ROUTES[f.properties.route];
     var faded = route && state.route !== "all" && f.properties.route !== state.route;   // filtered out of the list
-    return { color: "#1f2a44", weight: state.borders ? 0.6 : 0, opacity: 0.55, fill: true,
+    var check = state.checks && f && f.properties.checks && f.properties.checks.length > 0;
+    return { color: check ? "#8a4b00" : "#1f2a44", weight: check ? 1.8 : state.borders ? 0.6 : 0, opacity: check ? 0.95 : 0.55,
+             dashArray: check ? "5 4" : null, fill: true,
              fillColor: route ? route.colour : "#000", fillOpacity: route ? (faded ? 0.2 : 0.85) * state.opacity : 0 };
   };
   function restyle(id) { if (byId[id]) byId[id].setStyle(id === state.selected ? SELECTED : sectorStyle(byId[id].feature)); }
@@ -545,6 +568,10 @@
     sectors.setStyle(sectorStyle);
     if (state.selected !== null) restyle(state.selected);
   }
+  var nChecks = D.sectors.features.filter(function (f) { return f.properties.checks && f.properties.checks.length; }).length;
+  function checksNote() {
+    return state.checks ? '<div class="note"><span class="dash-key"></span>Dashed borders: check on the ground first (' + nChecks + " sectors)</div>" : "";
+  }
   function renderLegend() {
     var l = LAYERS[state.layer];
     if (l.kind === "sectors") {
@@ -554,7 +581,7 @@
           return '<li><span class="sw" style="background:' + r.colour + '"></span><b>' + esc(r.name) + '</b><span class="n">' +
                  fmt(r.unserved_hh, "int") + " homes</span><small>" + esc(r.who) + " &middot; " + r.sectors + " sectors</small></li>";
         }).join("") + "</ul>" +
-        (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") +
+        (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") + checksNote() +
         '<div class="note">Click a sector to see why it has its colour</div>';
       document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
       return;
@@ -563,7 +590,7 @@
       '<div class="t">' + esc(l.name) + '</div><div class="u">' + esc(l.unit) + " &middot; " + esc(l.short) + "</div>" +
       '<div class="bar" style="background:' + gradient(l.stops) + '"></div>' +
       '<div class="ticks">' + l.ticks.map(function (t) { return "<span>" + esc(t.label) + "</span>"; }).join("") + "</div>" +
-      (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") +
+      (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") + checksNote() +
       '<div class="note">Click a sector for its numbers &middot; darker = ' + esc(l.higher_is) + "</div>";
     document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
   }
@@ -615,13 +642,50 @@
     if (!r) return "";
     var grid = p.census_grid !== null ? p.census_grid : p.pred_grid;
     var sol = p.census_solar !== null ? p.census_solar : p.pred_solar;
-    var line = " of homes use the grid, and people live " + fmt(p.dist_grid, "num1") + " km from a line on average.";
-    var why = p.route === "grid" ? fmt(grid, "pct") + line
-      : "Only " + fmt(grid, "pct") + line + " Solar lights " + fmt(sol, "pct") + " of homes, " +
+    var line = " use the grid, and people live " + fmt(p.dist_grid, "num1") + " km from a line on average.";
+    var why = p.route === "grid" ? fmt(grid, "pct") + " of homes" + line
+      : (grid < 0.005 ? "Almost no homes" : "Only " + fmt(grid, "pct") + " of homes") + line + " Solar lights " + fmt(sol, "pct") + " of homes, " +
         (p.route === "solar_grow" ? "at least" : "below") + " the national " + fmt(R.solar_share_min, "pct") + ".";
     return '<div class="sec"><h3>Who should serve these homes</h3>' +
       '<div class="route-card"><span class="sw" style="background:' + r.colour + '"></span><div><b>' + esc(r.name) + "</b><span>" + esc(r.who) + "</span></div></div>" +
       '<p class="route-why">' + esc(why) + " " + esc(r.description) + "</p></div>";
+  }
+  // Model shares are shown with their typical range: the value ± the model's average error in a
+  // district it has not seen (blocked cross-validation, percentage points).
+  function errPP(target) { return D.errors_pp && D.errors_pp[target]; }
+  function shareRange(v, target) {
+    var e = errPP(target);
+    if (!e || v === null || v === undefined) return "";
+    return fmt(Math.max(0, v - e / 100), "pct") + "–" + fmt(Math.min(1, v + e / 100), "pct");
+  }
+  function accuracyText(p) {
+    if (!errPP("solar_share")) return "Estimates from the 2022 census and satellite data are about 8 percentage points off on average.";
+    return "Model shares are usually within ±" + Math.round(errPP("solar_share")) + " percentage points for solar and ±" +
+      Math.round(errPP("grid_share")) + " for grid in a district the model has not seen" +
+      (p ? ", so here solar is likely " + shareRange(p.pred_solar, "solar_share") + " and grid " + shareRange(p.pred_grid, "grid_share") + "." : ".");
+  }
+  function sinceText() {
+    return D.since ? "Solar has grown since 2022: the " + D.since.survey + " survey finds " + fmt(D.since.solar, "pct") +
+      " of homes lit by solar nationally, against " + fmt(D.calibration.target_share, "pct") + " in the census." : "";
+  }
+  function reportUrl(p) {   // a GitHub issue form with the sector filled in (field ids in .github/ISSUE_TEMPLATE/field_check.yml)
+    return D.feedback_url + (D.feedback_url.indexOf("?") < 0 ? "?" : "&") +
+      "title=" + encodeURIComponent("[Field check]: " + p.sector + " (" + p.district + ")") +
+      "&sector=" + encodeURIComponent(p.sector + ", " + p.district) + "&layer=" + encodeURIComponent(LAYERS[state.layer].name) +
+      "&link=" + encodeURIComponent(location.href.split("#")[0] + "#layer=" + state.layer + "&sector=" + p.id);
+  }
+  function sureSection(p) {
+    var check = p.checks && p.checks.length > 0;
+    return '<div class="sec"><h3>How sure are we</h3>' +
+      '<span class="sure ' + (check ? "check" : "usual") + '">' + (check ? "Check on the ground first" : "Usual accuracy" +
+        (errPP("solar_share") ? ": ±" + Math.round(errPP("solar_share")) + " points" : "")) + "</span>" +
+      (check ? '<ul class="checks">' + p.checks.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul>" : "") +
+      '<p class="fine">' + esc(accuracyText(p)) + " Use them to shortlist places to visit, not as final decisions. " +
+      esc(sinceText()) + "</p>" +
+      '<div class="actions"><button class="linkbtn" id="btn-copy">Copy link to this sector</button>' +
+      (D.feedback_url ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(reportUrl(p)) + '">Report a correction</a>' : "") + "</div>" +
+      (D.feedback_url ? '<p class="fine">"Report a correction" opens a public GitHub form (you need a GitHub account). Please leave out names and phone numbers.</p>' : "") +
+      "</div>";
   }
   function renderInfo(id, here) {
     var p = props(id), l = LAYERS[state.layer];
@@ -635,8 +699,14 @@
     if (pinLayer()) {
       head += '<div class="rankline">Priority rank <b>#' + p.rank + "</b> by number of homes, <b>#" + p.rank_share + "</b> by share (" +
               fmt(p.unserved_share, "pct") + "), of " + D.n_sectors + " sectors</div>";
-    } else if (state.layer === "penetration" && p.census_solar !== null) {
-      head += '<div class="rankline">Census 2022: <b style="color:var(--ink)">' + fmt(p.census_solar, "pct") + "</b> of homes lit by solar</div>";
+    }
+    if (state.layer === "penetration" && errPP("solar_share")) {
+      head += '<div class="rankline">Likely <b style="color:var(--ink)">' + shareRange(p.pred_solar, "solar_share") + "</b> (±" +
+              Math.round(errPP("solar_share")) + " percentage points)</div>";
+    }
+    if (state.layer === "penetration" && p.census_solar !== null) {
+      head += '<div class="rankline">Census 2022: <b style="color:var(--ink)">' + fmt(p.census_solar, "pct") + "</b> of homes lit by solar" +
+              (D.since ? " &middot; " + esc(D.since.survey) + ": " + fmt(D.since.solar, "pct") + " nationally" : "") + "</div>";
     } else if (state.layer === "pop" && p.population !== null) {
       head += '<div class="rankline">' + fmt(p.population, "int") + " people in " + fmt(p.area_km2, "num1") + " km² &middot; about " + fmt(p.households, "int") + " households</div>";
     }
@@ -657,7 +727,11 @@
     }
     var model = '<div class="sec"><h3>Model estimate</h3><div class="keys">' +
       "<div>Solar<b>" + fmt(p.pred_solar, "pct") + "</b></div><div>Grid<b>" + fmt(p.pred_grid, "pct") + "</b></div>" +
-      "<div>Households<b>" + fmt(p.households, "int") + "</b></div><div>Without light<b>" + fmt(p.unserved_hh, "int") + "</b></div></div></div>";
+      (errPP("solar_share") ? '<div class="range">likely<b>' + shareRange(p.pred_solar, "solar_share") + '</b></div><div class="range">likely<b>' +
+        shareRange(p.pred_grid, "grid_share") + "</b></div>" : "") +
+      "<div>Households<b>" + fmt(p.households, "int") + "</b></div><div>Without light<b>" + fmt(p.unserved_hh, "int") + "</b></div></div>" +
+      (errPP("solar_share") ? '<p class="fine">Likely range: the estimate ± the model\'s average error (' + Math.round(errPP("solar_share")) +
+        " percentage points for solar, " + Math.round(errPP("grid_share")) + " for grid).</p>" : "") + "</div>";
 
     var drivers = "";
     if (p.drivers && p.drivers.length) {
@@ -677,16 +751,13 @@
                "<td>" + esc(lk.name) + "</td><td>" + fmt(p[r[0]], lk.format) + "</td><td>" + fmt(D.medians[r[0]], lk.format) + "</td></tr>";
       }).join("") + '</tbody></table><p class="fine">Tap a row to show that layer. Clues are averages where people live.</p></div>';
 
-    var foot = '<div class="sec"><p class="fine" style="margin-top:0">Estimates from the 2022 census and satellite data, about 8 points off on average. ' +
-      'Use them to shortlist places to visit, not as final decisions.</p><div class="actions">' +
-      '<button class="linkbtn" id="btn-copy">Copy link to this sector</button></div></div>';
 
     $("info").innerHTML =
       '<button class="handle" id="info-handle" aria-label="Expand or shrink details"><i></i></button>' +
       "<header><div>" + (here ? '<div class="you-badge">You are here</div>' : "") +
       '<div class="kicker">Sector &middot; ' + esc(p.district) + " district</div><h2>" + esc(p.sector) + "</h2></div>" +
       '<button id="info-close" aria-label="Close details"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>' +
-      '<div class="sec">' + head + "</div>" + routeSection(p) + lit + model + drivers + clues + foot;
+      '<div class="sec">' + head + "</div>" + routeSection(p) + sureSection(p) + lit + model + drivers + clues;
     $("info").classList.add("show");
     $("info").scrollTop = 0;
     document.body.classList.add("info-open");
@@ -887,6 +958,7 @@
   $("btn-home").addEventListener("click", function () { closeInfo(); showRwanda(); });
   $("t-top").addEventListener("change", function () { state.top = this.checked; syncPins(); renderLegend(); renderChip(); });
   $("t-borders").addEventListener("change", function () { state.borders = this.checked; applyOpacity(); });
+  $("t-checks").addEventListener("change", function () { state.checks = this.checked; applyOpacity(); renderLegend(); });
   $("t-labels").addEventListener("change", function () { state.labels = this.checked; if (this.checked) labels.addTo(map); else map.removeLayer(labels); });
   $("t-opacity").addEventListener("input", function () { state.opacity = this.value / 100; applyOpacity(); $("op-val").textContent = this.value + "%"; });
   $("basemap-seg").innerHTML = Object.keys(D.basemaps).map(function (k) {
@@ -908,7 +980,7 @@
     "This map combines the " + esc(D.country) + " census " + esc(D.year) + " with six satellite and open-data clues to estimate, for every square kilometre, where homes have neither grid electricity nor solar.</p>" +
     "<p>About <b>" + fmt(D.totals.unserved_hh, "int") + "</b> of " + fmt(D.totals.households, "int") + " households had neither in 2022 (model estimate). " +
     "The <i>Who should serve them</i> layer splits them between the grid company, solar companies already selling there, and places the solar market has not reached. " +
-    "Estimates are about 8 percentage points off on average in a district the model has not seen.</p>" +
+    esc(accuracyText()) + " " + esc(sinceText()) + "</p>" +
     '<p><a href="' + D.links.limitations + '" target="_blank" rel="noopener">What the map cannot see</a> &middot; ' +
     '<a href="' + D.links.user_gaps + '" target="_blank" rel="noopener">Who the map is for</a> &middot; ' +
     '<a href="' + D.links.repo + '" target="_blank" rel="noopener">Code and data sources</a></p>';
@@ -920,9 +992,13 @@
     ["rank_by_number", "rank"], ["rank_by_share", "rank_share"], ["households", "households"],
     ["homes_without_light", "unserved_hh"], ["share_without_light", "unserved_share"],
     ["census_grid_share", "census_grid"], ["census_solar_share", "census_solar"], ["census_neither_share", "census_unserved"],
-    ["model_solar_share", "pred_solar"], ["model_grid_share", "pred_grid"], ["km_to_grid", "dist_grid"],
+    ["model_solar_share", "pred_solar"], ["model_solar_likely_range", function (p) { return shareRange(p.pred_solar, "solar_share"); }],
+    ["model_grid_share", "pred_grid"], ["model_grid_likely_range", function (p) { return shareRange(p.pred_grid, "grid_share"); }],
+    ["km_to_grid", "dist_grid"],
     ["minutes_to_city", "travel_min"], ["wealth_index", "rwi"], ["night_lights", "ntl"], ["people_per_km2", "density"],
     ["built_up_share", "built"], ["model_drivers", function (p) { return (p.drivers || []).join("; "); }],
+    ["check_first", function (p) { return p.checks && p.checks.length ? "yes" : "no"; }],
+    ["check_notes", function (p) { return (p.checks || []).join(" "); }],
     ["map_link", function (p) { return location.href.split("#")[0] + "#layer=underserved&sector=" + p.id; }]
   ];
   function csvCell(v) {
@@ -970,13 +1046,13 @@
 
   // ---------------------------------------------------------- guided tour
   var STEPS = [
-    { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, so support can reach the places the market has missed. This short guide shows you around." },
+    { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, and who could reach them: the grid company, solar companies already selling there, or funders where the solar market has not arrived. This short guide shows you around." },
     { el: function () { return $("legend"); }, title: "Read the colours",
       text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the priority list." },
     { el: function () { return isMobile() ? $("btn-panel") : $("sec-layers"); }, title: "Choose what the map shows",
       text: "Switch between the results (homes without light, who should serve them, solar use) and the six clues the model uses. The legend, pins and details follow your choice." },
     { el: function () { return $("map"); }, box: "center", title: "Tap a sector for details",
-      text: "Each sector shows its number for the current layer, who should serve its homes (the grid company, solar companies, or funders), how homes are lit, and why the model scores it the way it does." },
+      text: "Each sector shows its number for the current layer, who should serve its homes, how sure we are (and how to report a correction), how homes are lit, and why the model scores it the way it does." },
     { el: function () { return $("search"); }, title: "Search", text: "Find any sector or district in Rwanda by name, or type coordinates such as -1.95, 30.06." },
     { el: function () { return $("btn-locate"); }, title: "Where am I?",
       text: "Find the sector you are standing in and see its overview. Your browser will ask for permission; your location stays on your device." },
@@ -994,7 +1070,8 @@
     $("tour-title").textContent = typeof s.title === "function" ? s.title() : s.title;
     $("tour-text").textContent = typeof s.text === "function" ? s.text() : s.text;
     document.querySelector("#tour .dots").innerHTML = STEPS.map(function (_, i) { return '<i class="' + (i === step ? "on" : "") + '"></i>'; }).join("");
-    $("tour-back").style.visibility = step === 0 ? "hidden" : "visible";
+    $("tour-back").hidden = step === 0;
+    $("tour-skip").hidden = step === STEPS.length - 1;   // the last step's button already ends the guide
     $("tour-next").textContent = step === STEPS.length - 1 ? "Start exploring" : "Next";
     var vw = window.innerWidth, vh = window.innerHeight;
     if (isMobile()) {   // card at the bottom, or at the top when the highlighted part is low on the screen
@@ -1029,9 +1106,10 @@
   function openTour() {
     closeSettings();
     if (!isMobile()) document.body.classList.remove("panel-collapsed");
+    document.body.classList.add("touring");
     step = 0; $("tour").classList.add("show"); placeTour(); $("tour-next").focus();
   }
-  function endTour() { $("tour").classList.remove("show"); store.set("osm-guide-done", "1"); }
+  function endTour() { $("tour").classList.remove("show"); document.body.classList.remove("touring"); store.set("osm-guide-done", "1"); }
   $("tour-next").addEventListener("click", function () { if (step === STEPS.length - 1) endTour(); else { step++; placeTour(); } });
   $("tour-back").addEventListener("click", function () { if (step > 0) { step--; placeTour(); } });
   $("tour-skip").addEventListener("click", endTour);

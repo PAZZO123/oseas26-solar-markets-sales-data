@@ -90,6 +90,7 @@ def test_pipeline_from_features_to_map(tmp_path):
     assert set(ranked["route"]) <= {r["key"] for r in W.ROUTES}
     assert sorted(ranked["rank_share"]) == list(range(1, 37))
     assert ranked["unserved_share"].between(0, 1).all()
+    assert ranked["checks"].fillna("").map(lambda c: isinstance(c, str)).all()
 
     html = (tmp_path / "docs" / "map.html").read_text(encoding="utf-8")
     assert "__MAP_DATA__" not in html and "__TITLE__" not in html
@@ -112,7 +113,8 @@ def test_pipeline_from_features_to_map(tmp_path):
     for f in feats:
         p = f["properties"]
         for key in [s["metric"] for s in W.LAYERS] + ["rank", "sector", "district", "pt", "drivers",
-                                                      "route", "unserved_share", "rank_share"]:
+                                                      "route", "unserved_share", "rank_share",
+                                                      "checks"]:
             assert key in p, key
     assert sorted(f["properties"]["rank"] for f in feats) == list(range(1, 37))
     ranks = {f["properties"]["id"]: f["properties"]["rank"] for f in feats}
@@ -125,6 +127,12 @@ def test_pipeline_from_features_to_map(tmp_path):
     for d in data["downloads"]:
         assert d["url"].endswith("/raw/main/outputs/" + d["file"]) and d["bytes"] > 0
         assert d["meta_url"].endswith(".yml")
+
+    # No DHS file in this run, so no "since 2022" note; corrections go where config.yml says.
+    assert data["since"] is None
+    assert set(data["errors_pp"]) == {"solar_share", "grid_share"}       # from this run's CV
+    assert all(e > 0 for e in data["errors_pp"].values())
+    assert data["feedback_url"] == CFG["webmap"]["feedback_url"]
 
     # Every sector has one delivery route, and the route totals add up to the whole country.
     assert [r["key"] for r in data["routes"]] == [r["key"] for r in W.ROUTES]
@@ -143,7 +151,7 @@ def map_data(html: str) -> dict:
 
 
 def sector_props(**over) -> dict:
-    p = {"id": 1, "census_grid": 0.2, "census_solar": 0.05, "pred_grid": 0.3, "pred_solar": 0.1,
+    p = {"id": 1, "district": "D", "census_grid": 0.2, "census_solar": 0.05, "pred_grid": 0.3, "pred_solar": 0.1,
          "dist_grid": 3.0, "unserved_hh": 1000.0, "households": 2000.0}
     return p | over
 
@@ -198,6 +206,40 @@ def test_rebuild_from_map_keeps_rasters_and_refreshes_wording():
     assert data["links"] == W.LINKS
     # Rebuilding the rebuilt page changes nothing.
     assert W.rebuild_from_map(W.render_html(data), CFG) == data
+
+
+def test_confidence_notes():
+    props = pd.DataFrame([
+        sector_props(district="A", census_solar=0.74, pred_solar=0.17),   # census and model disagree
+        sector_props(district="B", census_solar=0.20, pred_solar=0.10),   # 10 points: within 15
+        sector_props(district="C", census_solar=None, pred_solar=0.10),   # no census: nothing to compare
+    ])
+    errors = pd.Series({"A": -16.9, "B": 3.0, "C": 8.0})
+    notes = W.confidence_notes(props, errors, {"disagree_pp": 15, "district_error_pp": 8})
+    assert notes[0] == ["The census says 74% of homes here use solar; the model says 17%.",
+                        ("In A district the model under-estimates solar use by 17 percentage "
+                         "points on average.")]
+    assert notes[1] == []
+    assert notes[2] == [("In C district the model over-estimates solar use by 8 percentage "
+                         "points on average.")]
+
+
+def test_model_errors_take_lightgbm_in_unseen_districts(tmp_path):
+    assert W.model_errors(tmp_path) == {}
+    pd.DataFrame({"target": ["solar_share", "solar_share", "solar_share", "grid_share"],
+                  "cv": ["random", "blocked by district_code", "blocked by district_code",
+                         "blocked by district_code"],
+                  "model": ["lightgbm", "linear", "lightgbm", "lightgbm"],
+                  "mae_pp": [7.57, 7.93, 7.9997, 11.325]}).to_csv(tmp_path / "cv_results.csv")
+    assert W.model_errors(tmp_path) == {"solar_share": 8.0, "grid_share": 11.3}
+
+
+def test_survey_since(tmp_path):
+    assert W.survey_since(tmp_path) is None
+    (tmp_path / "dhs_validation.json").write_text(json.dumps(
+        {"survey": "Rwanda DHS 2025", "national": {"solar": 0.196, "grid": 0.539, "none": 0.265}}))
+    assert W.survey_since(tmp_path) == {"survey": "Rwanda DHS 2025", "solar": 0.196, "grid": 0.539,
+                                        "none": 0.265}
 
 
 def test_layer_downloads_skip_metadata_without_its_layer(tmp_path):
