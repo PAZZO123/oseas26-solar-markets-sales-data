@@ -359,7 +359,8 @@ embedded) for desktop and mobile, published with GitHub Pages
   when location is blocked, unavailable or the page is not secure (a phone opening
   `http://<computer-IP>:8777` gets no location; use the published https map there).
 - **Guided tour** on the first visit (remembered in the browser; the ? button reopens it). Its
-  buttons fit phones down to 320 px wide.
+  buttons fit phones down to 320 px wide. Two of its steps open a real sector card (the one
+  already open, or the top priority sector) to explain it, then the map goes back to how it was.
 - **Mobile**: search at the top, a summary chip of the current settings, the location button near
   the top, a full-screen settings screen with a back button, and a bottom sheet for details.
 - **Shareable links**: the address remembers the layer and sector, e.g.

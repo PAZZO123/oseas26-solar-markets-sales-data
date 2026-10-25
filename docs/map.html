@@ -203,7 +203,7 @@
   #tour .btn { min-height: 40px; }
   #tour .dots { display: flex; flex-wrap: wrap; gap: 5px; }
   /* the guide sets an open details card aside so the parts it points at stay visible */
-  body.touring #info { display: none !important; }
+  body.touring:not(.tour-card) #info { display: none !important; }
   #tour .dots i { width: 7px; height: 7px; border-radius: 50%; background: #d3d7e0; }
   #tour .dots i.on { background: var(--accent); }
   .btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 600; white-space: nowrap; }
@@ -236,8 +236,8 @@
     #info .handle i { display: block; width: 40px; height: 5px; border-radius: 3px; background: #cfd3db; margin: 0 auto; }
     #info header { top: 0; }
     body.info-open #legend, body.info-open #btn-panel { display: none !important; }
-    body.info-open.touring #legend { display: block !important; }
-    body.info-open.touring #btn-panel { display: flex !important; }
+    body.info-open.touring:not(.tour-card) #legend { display: block !important; }
+    body.info-open.touring:not(.tour-card) #btn-panel { display: flex !important; }
     /* under the search box and left of the map buttons, so the details sheet never covers it */
     #toast { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 10px; right: 66px; width: auto; max-width: none; transform: translateY(-12px); }
     #toast.show { transform: none; }
@@ -1051,8 +1051,17 @@
       text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the priority list." },
     { el: function () { return isMobile() ? $("btn-panel") : $("sec-layers"); }, title: "Choose what the map shows",
       text: "Switch between the results (homes without light, who should serve them, solar use) and the six clues the model uses. The legend, pins and details follow your choice." },
-    { el: function () { return $("map"); }, box: "center", title: "Tap a sector for details",
-      text: "Each sector shows its number for the current layer, who should serve its homes, how sure we are (and how to report a correction), how homes are lit, and why the model scores it the way it does." },
+    { card: true, el: function () { showTourSector(); $("info").scrollTop = 0; return $("info"); },
+      rect: function () { return rectInInfo([$("info").querySelector("header"), $("info").querySelector(".sec")]); },
+      title: "A sector up close",
+      text: function () { var p = props(state.selected); return "This is " + p.sector + " in " + p.district + " district. The big number belongs to the layer on the map, " +
+                                 "compared with the rest of Rwanda. Tap any sector to see the same details."; } },
+    { card: true, el: function () { showTourSector(); var secs = infoSections(["Who should serve these homes", "How sure are we"]);
+                                     if (secs.length) $("info").scrollTop = secs[0].offsetTop - $("info").querySelector("header").offsetHeight;
+                                     return $("info"); },
+      rect: function () { return rectInInfo(infoSections(["Who should serve these homes", "How sure are we"])); },
+      title: "Who should serve it, and how sure we are",
+      text: "Each sector says who could reach its unlit homes, gives a likely range for the estimates and says when to check on the ground first. Found something different? Use \u201cReport a correction\u201d." },
     { el: function () { return $("search"); }, title: "Search", text: "Find any sector or district in Rwanda by name, or type coordinates such as -1.95, 30.06." },
     { el: function () { return $("btn-locate"); }, title: "Where am I?",
       text: "Find the sector you are standing in and see its overview. Your browser will ask for permission; your location stays on your device." },
@@ -1062,9 +1071,32 @@
                                              : "The sectors to look at first. Rank them by the number of homes without light or by their share, and keep one route only. Click one to fly to it; use it as a shortlist for field visits, and download it as a spreadsheet below."; } },
     { el: function () { return $("btn-help"); }, title: "You're ready", text: "Open this guide again any time with the question-mark button." }
   ];
-  var step = 0;
+  // The guide shows a real sector: the one open when it started, or else the top priority sector.
+  var step = 0, tourStart = null;
+  function showTourSector() {
+    var id = tourStart !== null ? tourStart : D.top[0];
+    if (state.selected !== id) select(id, { fly: true });
+  }
+  function infoSections(titles) {
+    return Array.prototype.filter.call($("info").querySelectorAll(".sec"), function (sec) {
+      var h = sec.querySelector("h3");
+      return h && titles.indexOf(h.textContent) >= 0;
+    });
+  }
+  function rectInInfo(els) {   // the box around els, cut to the visible part of the details card
+    var info = $("info").getBoundingClientRect(), b = null;
+    els.forEach(function (e) {
+      var r = e.getBoundingClientRect();
+      b = b ? { left: Math.min(b.left, r.left), top: Math.min(b.top, r.top), right: Math.max(b.right, r.right), bottom: Math.max(b.bottom, r.bottom) }
+            : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    });
+    if (!b) return info;
+    var top = Math.max(b.top, info.top), bottom = Math.min(b.bottom, info.bottom);
+    return { left: b.left, right: b.right, top: top, bottom: bottom, width: b.right - b.left, height: bottom - top };
+  }
   function placeTour() {
     var s = STEPS[step], spot = document.querySelector("#tour .spot"), card = document.querySelector("#tour .tcard");
+    document.body.classList.toggle("tour-card", !!s.card);   // before el(), so the details card can be measured
     var el = s.el ? s.el() : null;
     if (el && el.closest && el.closest("#panel")) el.scrollIntoView({ block: "nearest" });
     $("tour-title").textContent = typeof s.title === "function" ? s.title() : s.title;
@@ -1075,14 +1107,14 @@
     $("tour-next").textContent = step === STEPS.length - 1 ? "Start exploring" : "Next";
     var vw = window.innerWidth, vh = window.innerHeight;
     if (isMobile()) {   // card at the bottom, or at the top when the highlighted part is low on the screen
-      var low = el && el.getClientRects().length > 0 && s.box !== "center" && el.getBoundingClientRect().top > vh * 0.5;
+      var low = s.card || (el && el.getClientRects().length > 0 && s.box !== "center" && el.getBoundingClientRect().top > vh * 0.5);
       card.style.top = low ? "max(12px, env(safe-area-inset-top))" : "auto";
       card.style.bottom = low ? "auto" : "max(16px, env(safe-area-inset-bottom))";
     } else {
       card.style.bottom = "auto";
     }
     if (el && el.getClientRects().length > 0) {
-      var r = el.getBoundingClientRect(), pad = 6;
+      var r = s.rect ? s.rect() : el.getBoundingClientRect(), pad = 6;
       if (s.box === "center") r = { left: vw / 2 - 90, top: vh / 2 - 60, width: 180, height: 120, right: vw / 2 + 90, bottom: vh / 2 + 60 };
       spot.style.display = "block";
       spot.style.left = (r.left - pad) + "px"; spot.style.top = (r.top - pad) + "px";
@@ -1107,9 +1139,17 @@
     closeSettings();
     if (!isMobile()) document.body.classList.remove("panel-collapsed");
     document.body.classList.add("touring");
+    tourStart = state.selected;
     step = 0; $("tour").classList.add("show"); placeTour(); $("tour-next").focus();
   }
-  function endTour() { $("tour").classList.remove("show"); document.body.classList.remove("touring"); store.set("osm-guide-done", "1"); }
+  function endTour() {
+    $("tour").classList.remove("show");
+    document.body.classList.remove("touring", "tour-card");
+    store.set("osm-guide-done", "1");
+    if (state.selected !== tourStart) {   // put back what was open before the guide showed its example
+      if (tourStart !== null) select(tourStart, { fly: true }); else { closeInfo(); showRwanda(); }
+    }
+  }
   $("tour-next").addEventListener("click", function () { if (step === STEPS.length - 1) endTour(); else { step++; placeTour(); } });
   $("tour-back").addEventListener("click", function () { if (step > 0) { step--; placeTour(); } });
   $("tour-skip").addEventListener("click", endTour);
