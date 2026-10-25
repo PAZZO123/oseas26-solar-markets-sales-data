@@ -23,6 +23,10 @@
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
   #map { position: fixed; inset: 0; background: #e9ebe6; }
   .raster { image-rendering: pixelated; image-rendering: crisp-edges; }
+  /* Leaflet 1.9 blends tiles with plus-lighter to hide hairline gaps, but at our in-between zoom
+     levels neighbouring tiles overlap and the overlap adds up to a white line. Normal blending and
+     a half-pixel overlap hide both. */
+  .leaflet-container img.leaflet-tile { mix-blend-mode: normal; width: 256.5px !important; height: 256.5px !important; }
   .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
   .icon { width: 20px; height: 20px; flex: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -162,6 +166,7 @@
   table.clues tr.clue { cursor: pointer; }
   table.clues tr.clue:hover td { background: #f6f8fb; }
   table.clues tr.active td { font-weight: 700; }
+  table.clues .unit { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .route-card { display: flex; gap: 10px; align-items: flex-start; }
   .route-card .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 4px; }
@@ -227,6 +232,7 @@
     #controls .zoom { display: none; }
     #legend { left: 10px; right: 80px; width: auto; bottom: max(18px, env(safe-area-inset-bottom)); padding: 9px 12px; }
     #legend .note, #legend .routes small { display: none; }
+    #legend .note.colour { display: flex; margin-top: 4px; }
     #info { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 62vh; border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); }
     #info.tall { max-height: 88vh; }
     #info .handle { display: block; width: 100%; border: 0; background: #fff; padding: 8px 0 0; }
@@ -588,7 +594,8 @@
       '<div class="bar" style="background:' + gradient(l.stops) + '"></div>' +
       '<div class="ticks">' + l.ticks.map(function (t) { return "<span>" + esc(t.label) + "</span>"; }).join("") + "</div>" +
       (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") + checksNote() +
-      '<div class="note">Click a sector for its numbers &middot; darker = ' + esc(l.higher_is) + "</div>";
+      '<div class="note colour">Colours: ' + esc(l.colour_note) + "</div>" +
+      '<div class="note">Click a sector for its numbers</div>';
     document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
   }
   function renderChip() {
@@ -722,7 +729,8 @@
       METRIC_ROWS.map(function (r) {
         var lk = LAYERS[r[1]];
         return '<tr class="clue' + (r[1] === state.layer ? " active" : "") + '" data-key="' + r[1] + '" tabindex="0" title="Show this layer on the map">' +
-               "<td>" + esc(lk.name) + "</td><td>" + fmt(p[r[0]], lk.format) + "</td><td>" + fmt(D.medians[r[0]], lk.format) + "</td></tr>";
+               "<td>" + esc(lk.name) + '<small class="unit">' + esc(lk.table_unit) + "</small></td><td>" + fmt(p[r[0]], lk.format) +
+               "</td><td>" + fmt(D.medians[r[0]], lk.format) + "</td></tr>";
       }).join("") + '</tbody></table><p class="fine">Tap a row to show that layer. Clues are averages where people live.</p></div>';
 
 

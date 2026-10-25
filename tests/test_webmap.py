@@ -282,3 +282,16 @@ def test_colourise_ticks_are_in_real_units_for_log_layers():
     assert ticks[0]["value"] == pytest.approx(0.0, abs=1e-6)
     assert ticks[-1]["value"] == pytest.approx(1000.0, rel=1e-4)
     assert 10 < ticks[1]["value"] < 100      # midpoint on the log scale, not 500
+
+
+def test_legend_colour_notes_match_the_colour_ramps():
+    """A ramp whose high end is the lighter colour must not tell readers that darker means more."""
+    from matplotlib import colormaps
+
+    for spec in W.LAYERS:
+        assert spec["colour_note"] and spec["table_unit"], spec["key"]
+        if spec.get("kind") == "sectors":      # coloured by route, not by a ramp
+            continue
+        low, high = (sum(colormaps[spec["cmap"]](t)[:3]) for t in (0.0, 1.0))
+        if high > low:
+            assert not spec["colour_note"].startswith("darker"), spec["key"]

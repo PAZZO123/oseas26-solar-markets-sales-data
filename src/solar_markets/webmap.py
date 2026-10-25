@@ -67,7 +67,8 @@ BASEMAPS = {
 }
 
 # The layers people can show, in menu order. `metric` is the sector field the details card leads
-# with; `format` says how to print it (see fmt()).
+# with; `format` says how to print it (see fmt()). `colour_note` names the colour at the high end
+# of the ramp (not every ramp gets darker as values rise); `table_unit` labels the sector value.
 LAYERS = [
     {"key": "underserved", "group": "Results", "name": "Underserved market",
      "short": "Households with neither grid nor solar",
@@ -76,7 +77,7 @@ LAYERS = [
                     "layer funders act on.",
      "cmap": "magma_r", "log": False, "unit": "households per km²", "format": "int",
      "metric": "unserved_hh", "metric_label": "households with neither grid nor solar",
-     "higher_is": "more households without light"},
+     "colour_note": "darker = more households without light", "table_unit": "homes in this sector"},
     {"key": "route", "group": "Results", "name": "Who should serve them", "kind": "sectors",
      "short": "Grid, a working solar market, or none yet",
      "description": "Who could bring light to each sector's unlit homes: the grid company where "
@@ -84,14 +85,14 @@ LAYERS = [
                     "works, and funders where the solar market has not arrived.",
      "unit": "per sector", "format": "int",
      "metric": "unserved_hh", "metric_label": "households with neither grid nor solar",
-     "higher_is": "more households without light"},
+     "colour_note": "each colour is one route, see the key", "table_unit": "homes in this sector"},
     {"key": "penetration", "group": "Results", "name": "Solar penetration",
      "short": "Share of homes lit by solar",
      "description": "Estimated share of households whose main light is solar (calibrated to the "
                     "2022 census). Blank where almost nobody lives.",
      "cmap": "viridis", "log": False, "unit": "of households", "format": "pct",
      "metric": "pred_solar", "metric_label": "of households use solar (model estimate)",
-     "higher_is": "more solar"},
+     "colour_note": "yellow = more solar, dark purple = little solar", "table_unit": "of homes"},
     {"key": "ntl", "group": "Clues the model uses", "name": "Night lights",
      "short": "Brightness at night (VIIRS 2022)",
      "description": "Average night-time brightness seen by satellite. Bright = grid electricity "
@@ -99,47 +100,47 @@ LAYERS = [
                     "other clues.",
      "cmap": "inferno", "log": True, "unit": "nW/cm²/sr", "format": "num2",
      "metric": "ntl", "metric_label": "night-light brightness where people live",
-     "higher_is": "brighter"},
+     "colour_note": "yellow = brighter, black = dark", "table_unit": "nW/cm²/sr"},
     {"key": "pop", "group": "Clues the model uses", "name": "Population",
      "short": "People per km² (WorldPop 2020)",
      "description": "How many people live in each square kilometre. More people means more "
                     "potential customers and more need.",
      "cmap": "YlGnBu", "log": True, "unit": "people per km²", "format": "int",
      "metric": "density", "metric_label": "people per km² on average",
-     "higher_is": "more people"},
+     "colour_note": "darker blue = more people", "table_unit": "people per km²"},
     {"key": "rwi", "group": "Clues the model uses", "name": "Wealth",
      "short": "Relative Wealth Index (Meta)",
      "description": "Estimated wealth compared with the rest of Rwanda, from about -1 (poorer) "
                     "to +2 (richer). Wealthier areas can afford solar more easily.",
      "cmap": "PuOr", "log": False, "unit": "index", "format": "num2",
      "metric": "rwi", "metric_label": "wealth index where people live",
-     "higher_is": "wealthier"},
+     "colour_note": "purple = richer, brown = poorer", "table_unit": "index, 0 = middle"},
     {"key": "dist_grid", "group": "Clues the model uses", "name": "Distance to the grid",
      "short": "Km to the nearest power line (Gridfinder)",
      "description": "Distance to the nearest likely power line. Close to the grid, families "
                     "usually connect to it; far away, solar or nothing.",
      "cmap": "YlOrBr", "log": False, "unit": "km", "format": "num1",
      "metric": "dist_grid", "metric_label": "km to the grid where people live",
-     "higher_is": "farther from the grid"},
+     "colour_note": "darker = farther from the grid", "table_unit": "km"},
     {"key": "travel_min", "group": "Clues the model uses", "name": "Travel time to a city",
      "short": "Minutes to the nearest city (2015)",
      "description": "Travel time to the nearest city of 50,000 or more people. Remote places "
                     "are harder for solar sales agents to reach.",
      "cmap": "BuPu", "log": False, "unit": "minutes", "format": "int",
      "metric": "travel_min", "metric_label": "minutes to a city where people live",
-     "higher_is": "more remote"},
+     "colour_note": "darker = more remote", "table_unit": "minutes"},
     {"key": "built", "group": "Clues the model uses", "name": "Built-up area",
      "short": "Share of land with buildings (ESA 2021)",
      "description": "Share of each square covered by buildings. High in towns, very low in "
                     "scattered rural settlements.",
      "cmap": "OrRd", "log": False, "unit": "of land", "format": "pct",
      "metric": "built", "metric_label": "of land built up where people live",
-     "higher_is": "more built-up"},
+     "colour_note": "darker = more built-up", "table_unit": "of land"},
 ]
 # The fields of a LAYERS entry the page uses; the rest of a page layer is its raster and legend.
 # A layer of kind "sectors" has no raster: the page colours the sector shapes instead.
 LAYER_TEXT = ("key", "group", "name", "short", "description", "unit", "format", "metric",
-              "metric_label", "higher_is")
+              "metric_label", "colour_note", "table_unit")
 LAYER_RASTER = ("image", "stops", "ticks")
 
 # Who could bring light to a sector's unlit homes; the rule is delivery_routes() with the
