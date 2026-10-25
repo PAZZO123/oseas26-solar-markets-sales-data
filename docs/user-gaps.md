@@ -85,7 +85,21 @@ working) and Ndaro (not yet arrived).
 `LIMITATIONS.md` §4 warns about this. A funder looking for places where most homes are dark had
 no way to find them.
 
-**How it will be filled:** coming in `feat/webmap-fair-ranking`.
+**How it is filled** (`feat/webmap-fair-ranking`). The priority list in the panel gets two
+controls:
+
+- **Rank by:** *Most homes* (the number of homes without light, as before) or *Highest share*
+  (the share of a sector's homes without light). By share, Sovu, Kavumu and Rusebeya (59% of
+  homes dark) lead instead of ranking 39th–119th.
+- **Who should serve them:** all routes, or one route only. A funder can list the 72 sectors where
+  the solar market has not arrived. On the route layer, the other sectors fade.
+
+The numbered pins follow the list and show on both the underserved and the route layers. Each
+sector card gives both ranks, for example "#139 by number of homes, #10 by share (57%)". The link
+keeps the choice, for example `map.html#layer=route&rank=share&route=solar_gap`.
+`reports/top_underserved_sectors.csv` gains `unserved_share` and `rank_share` on the next full run.
+
+**Check it.** Open the link above. Sovu, Kavumu and Rusebeya lead the list.
 
 ### 3. Download the data
 
