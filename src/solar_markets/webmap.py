@@ -85,7 +85,8 @@ LAYERS = [
                     "works, and funders where the solar market has not arrived.",
      "unit": "per sector", "format": "int",
      "metric": "unserved_hh", "metric_label": "households with neither grid nor solar",
-     "colour_note": "each colour is one route, see the key", "table_unit": "homes in this sector"},
+     "colour_note": "blue = grid, amber = solar market working, dark red = not yet arrived",
+     "table_unit": "homes in this sector"},
     {"key": "penetration", "group": "Results", "name": "Solar penetration",
      "short": "Share of homes lit by solar",
      "description": "Estimated share of households whose main light is solar (calibrated to the "
