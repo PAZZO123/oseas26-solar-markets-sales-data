@@ -91,7 +91,7 @@ of solar growth since the 2022 census (DHS 2025: solar 19.6% nationally).
   not to make final funding decisions.
 - Combine it with local knowledge: REG/EDCL grid plans, company coverage, district officials.
 - Prefer areas where the model and the census agree. Check each priority zone's drivers in the
-  map popup before acting on it.
+  web map's details card (click the sector) before acting on it.
 - Commercial use is restricted: the layers are CC BY-NC 4.0 because the wealth index input is.
 - Re-run with newer survey data when available (EICV7, the next DHS, MTF), and with GOGLA
   calibration.
