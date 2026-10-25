@@ -1,4 +1,6 @@
-from solar_markets.config import DEFAULT_CONFIG, get_paths, load_config
+import sys
+
+from solar_markets.config import DEFAULT_CONFIG, cli_args, get_paths, load_config
 
 
 def test_config_loads():
@@ -28,3 +30,11 @@ def test_paths_resolve_inside_project(tmp_path):
     paths.ensure()
     assert paths.raw.is_dir() and paths.outputs.is_dir()
     assert paths.raw.is_relative_to(tmp_path)
+
+
+def test_cli_args_adds_on_off_flags(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["stage", "--from-map"])
+    args = cli_args("stage", {"--from-map": "rebuild"})
+    assert args.from_map is True and args.config == str(DEFAULT_CONFIG)
+    monkeypatch.setattr(sys, "argv", ["stage"])
+    assert cli_args("stage", {"--from-map": "rebuild"}).from_map is False

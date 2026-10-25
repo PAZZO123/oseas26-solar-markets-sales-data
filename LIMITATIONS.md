@@ -77,6 +77,13 @@ of solar growth since the 2022 census (DHS 2025: solar 19.6% nationally).
   solar (−16.9 pp) and therefore over-states the unserved gap.
 - **Away from** groups the census or population grids undercount: informal settlements,
   mobile and refugee populations.
+- **Through the "who should serve them" routes.** The map calls a sector a grid job when at least
+  half its homes use the grid or people live within 1 km of a line on average; otherwise its
+  solar market counts as working when solar reaches the national share (13.9%). These are rules
+  of thumb on sector averages. They rest on the estimated solar/grid split and on Gridfinder lines,
+  which can be missing or wrong. They also ignore the National Electrification Plan, so a sector
+  marked "solar not yet arrived" may already be due for the grid. Poor villages inside a "grid"
+  sector can still be off the grid.
 
 ## 5. How to use it responsibly
 

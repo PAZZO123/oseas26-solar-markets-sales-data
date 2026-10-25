@@ -112,6 +112,16 @@ validation:
     grid_codes: [1]          # electricity
     missing_codes: [99]
 
+webmap:
+  # Who should serve a sector's unlit homes (docs/user-gaps.md). A sector is a grid job when at
+  # least grid_share_min of its homes use the grid (census) or people live within grid_km_max of
+  # a line on average (Gridfinder). Otherwise its solar market is "working" where the census
+  # solar share reaches solar_share_min (null = the national share) and "not yet arrived" below.
+  routes:
+    grid_share_min: 0.5
+    grid_km_max: 1.0
+    solar_share_min: null
+
 export:
   normalise_percentiles: [2, 98]
   # Pixels with fewer people than this are nodata in the penetration layer (parks, lakes).
