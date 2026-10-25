@@ -179,7 +179,9 @@ We are building the market-reality layer for **Rwanda** at 1 km resolution:
 4. **Calibration:** logit shift so the national total matches a control total (census now,
    GOGLA sales next).
 5. **Outputs:** two EAE-conformant 0-1 rasters (off-grid solar penetration, underserved
-   market) with metadata, a limitations statement and an interactive map.
+   market) with metadata, a limitations statement and an interactive map. The map adds a "who
+   should serve them" layer that sorts every sector into grid connections, a working solar
+   market, or a solar market not yet arrived.
 
 ### Results (midpoint, Rwanda 2022)
 
@@ -327,18 +329,38 @@ Quick-looks for the slides are saved to `reports/`.
 embedded) for desktop and mobile, published with GitHub Pages
 (<https://pazzo123.github.io/oseas26-solar-markets-sales-data/map.html>):
 
-- **One layer at a time, with its own legend**: the two results (underserved market, solar
-  penetration) and the six clues the model uses (night lights, population, wealth, distance to the
-  grid, travel time, built-up area). Legends are in real units and say which colour means more
-  (not every ramp gets darker as values rise); the top-10 priority pins show on the underserved
-  layer.
+- **One layer at a time, with its own legend**: the three results (underserved market, who should
+  serve them, solar penetration) and the six clues the model uses (night lights, population,
+  wealth, distance to the grid, travel time, built-up area). Legends are in real units and say
+  which colour means more (not every ramp gets darker as values rise); the priority pins show on
+  the underserved and route layers.
+- **Who should serve them**: each sector is coloured by who could bring light to its unlit homes:
+  grid connections (REG/EDCL), a solar market that already works (solar and PAYGo companies), or a
+  solar market that has not arrived (funders). The thresholds are in `config.yml`
+  (`webmap.routes`). Every sector card has a section explaining its route.
+- **Priority list**: rank sectors by the number of homes without light or by their share (so
+  small, remote sectors come up), and keep one route only. The numbered pins follow the list,
+  and the link keeps the choice, e.g. `map.html#layer=route&rank=share&route=solar_gap`.
+- **Take the data with you**: download every sector in the priority list as a CSV that opens in
+  Excel (made in the browser, in list order, with a link back to each sector), or the two EAE
+  GeoTIFF layers with their metadata. The licence (CC BY-NC 4.0) is stated next to them.
+- **How sure are we**: a sector card says "check on the ground first", with the reason, when the
+  census and the model disagree by more than 15 points or the district is off by 8 or more
+  (thresholds in `config.yml`, `webmap.confidence`). Accuracy figures are left out of the demo for
+  now. It also notes that DHS 2025 finds more
+  solar than the 2022 census. "Report a correction" opens a GitHub issue form with the sector
+  filled in, and a switch draws dashed borders on the sectors to check first.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of
   sectors below it, how homes are lit (census 2022), the model estimate, the three SHAP drivers,
   and a table of every layer for that sector with its unit (click a row to switch the map to it).
 - **Search** any of Rwanda's 416 sectors or 30 districts, or coordinates inside Rwanda.
 - **My location** finds the sector you are in and opens its overview (the position stays in the
-  browser).
-- **Guided tour** on the first visit (remembered in the browser; the ? button reopens it).
+  browser). It always answers: "Finding your location…" at once, then the sector, or what to do
+  when location is blocked, unavailable or the page is not secure (a phone opening
+  `http://<computer-IP>:8777` gets no location; use the published https map there).
+- **Guided tour** on the first visit (remembered in the browser; the ? button reopens it). Its
+  buttons fit phones down to 320 px wide. Two of its steps open a real sector card (the one
+  already open, or the top priority sector) to explain it, then the map goes back to how it was.
 - **Mobile**: search at the top, a summary chip of the current settings, the location button near
   the top, a full-screen settings screen with a back button, and a bottom sheet for details.
 - **Shareable links**: the address remembers the layer and sector, e.g.
@@ -348,7 +370,12 @@ embedded) for desktop and mobile, published with GitHub Pages
 
 The full ranking is in `reports/top_underserved_sectors.csv` and the per-sector table in
 `data/processed/sector_summary.gpkg`. The page layout lives in
-`src/solar_markets/webmap_template.html`.
+`src/solar_markets/webmap_template.html`. After changing the template or the layer wording,
+`python -m solar_markets.webmap --from-map` rebuilds `docs/map.html` around the rasters and sector
+numbers already in it, so it works without `data/processed`.
+
+Who uses the map, what each of them needs, and the gaps we are closing for them are in
+[`docs/user-gaps.md`](docs/user-gaps.md).
 
 ### Limitations
 
@@ -395,6 +422,7 @@ python -m solar_markets.model      # reports/cv_results.csv, outputs/solar_share
 python -m solar_markets.calibrate  # outputs/solar_share_calibrated.tif
 python -m solar_markets.export     # outputs/rwa_ogs_*.tif + .yml metadata
 python -m solar_markets.webmap     # docs/map.html
+python -m solar_markets.webmap --from-map   # rebuild docs/map.html only (template changes, no data)
 python -m solar_markets.validate   # reports/dhs_validation.* (needs the DHS 2025 file)
 ```
 

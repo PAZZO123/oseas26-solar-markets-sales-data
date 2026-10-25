@@ -87,14 +87,21 @@ def test_pipeline_from_features_to_map(tmp_path):
 
     ranked = pd.read_csv(reports / "top_underserved_sectors.csv")
     assert ranked["unserved_hh"].is_monotonic_decreasing
+    assert set(ranked["route"]) <= {r["key"] for r in W.ROUTES}
+    assert sorted(ranked["rank_share"]) == list(range(1, 37))
+    assert ranked["unserved_share"].between(0, 1).all()
+    assert ranked["checks"].fillna("").map(lambda c: isinstance(c, str)).all()
 
     html = (tmp_path / "docs" / "map.html").read_text(encoding="utf-8")
     assert "__MAP_DATA__" not in html and "__TITLE__" not in html
     data = map_data(html)
 
-    # One entry per layer, each with an image, a colour ramp and ticks in its own units.
+    # One entry per layer; raster layers have an image, a colour ramp and ticks in their own units.
     assert [layer["key"] for layer in data["layers"]] == [s["key"] for s in W.LAYERS]
     for layer in data["layers"]:
+        if layer["kind"] == "sectors":
+            assert layer["image"] is None and len(layer["stops"]) == len(W.ROUTES)
+            continue
         assert layer["image"].startswith("data:image/png;base64,")
         assert len(layer["stops"]) == 9 and len(layer["ticks"]) == 3
         values = [t["value"] for t in layer["ticks"]]
@@ -105,12 +112,33 @@ def test_pipeline_from_features_to_map(tmp_path):
     assert len(feats) == 36 and data["n_sectors"] == 36
     for f in feats:
         p = f["properties"]
-        for key in [s["metric"] for s in W.LAYERS] + ["rank", "sector", "district", "pt", "drivers"]:
+        for key in [s["metric"] for s in W.LAYERS] + ["rank", "sector", "district", "pt", "drivers",
+                                                      "route", "unserved_share", "rank_share",
+                                                      "checks"]:
             assert key in p, key
     assert sorted(f["properties"]["rank"] for f in feats) == list(range(1, 37))
     ranks = {f["properties"]["id"]: f["properties"]["rank"] for f in feats}
     assert [ranks[i] for i in data["top"]] == list(range(1, 11))
     assert data["medians"]["unserved_hh"] is not None
+
+    # The EAE layers export wrote can be downloaded from the page, each with its metadata.
+    exported = sorted(f.name for f in (tmp_path / "outputs").glob("rwa_ogs_*.tif"))
+    assert sorted(d["file"] for d in data["downloads"]) == exported and exported
+    for d in data["downloads"]:
+        assert d["url"].endswith("/raw/main/outputs/" + d["file"]) and d["bytes"] > 0
+        assert d["meta_url"].endswith(".yml")
+
+    # No DHS file in this run, so no "since 2022" note; corrections go where config.yml says.
+    assert data["since"] is None
+    assert set(data["errors_pp"]) == {"solar_share", "grid_share"}       # from this run's CV
+    assert all(e > 0 for e in data["errors_pp"].values())
+    assert data["feedback_url"] == CFG["webmap"]["feedback_url"]
+
+    # Every sector has one delivery route, and the route totals add up to the whole country.
+    assert [r["key"] for r in data["routes"]] == [r["key"] for r in W.ROUTES]
+    assert sum(r["sectors"] for r in data["routes"]) == 36
+    assert sum(r["unserved_hh"] for r in data["routes"]) == pytest.approx(
+        sum(f["properties"]["unserved_hh"] for f in feats), abs=36)
 
     # Starts on the underserved layer and on a basemap that also works from a local file.
     assert data["default_layer"] == "underserved"
@@ -119,11 +147,116 @@ def test_pipeline_from_features_to_map(tmp_path):
 
 
 def map_data(html: str) -> dict:
-    import re
+    return W.read_map_data(html)
 
-    m = re.search(r'<script id="map-data" type="application/json">(.*?)</script>', html, re.DOTALL)
-    assert m, "map data block missing"
-    return json.loads(m.group(1))
+
+def sector_props(**over) -> dict:
+    p = {"id": 1, "district": "D", "census_grid": 0.2, "census_solar": 0.05, "pred_grid": 0.3, "pred_solar": 0.1,
+         "dist_grid": 3.0, "unserved_hh": 1000.0, "households": 2000.0}
+    return p | over
+
+
+def built_map(layers: list[dict]) -> str:
+    """A map.html as an earlier run (without the derived fields) would have written it."""
+    feats = [{"type": "Feature", "properties": sector_props(id=i), "geometry": None}
+             for i in (1, 2)]
+    return W.render_html({"title": "T", "layers": layers, "n_sectors": 2, "links": {},
+                          "calibration": {"target_share": 0.14},
+                          "sectors": {"type": "FeatureCollection", "features": feats}})
+
+
+RULES = {"grid_share_min": 0.5, "grid_km_max": 1.0, "solar_share_min": None}
+
+
+def test_delivery_routes():
+    props = pd.DataFrame([
+        sector_props(census_grid=0.6),                      # most homes on the grid
+        sector_props(dist_grid=0.5),                        # few on the grid, but lines are close
+        sector_props(census_solar=0.3),                     # solar above the national share
+        sector_props(census_solar=0.14),                    # exactly the national share
+        sector_props(),                                     # little grid, little solar, far away
+        sector_props(census_grid=None, census_solar=None, pred_grid=0.7),   # model fills in
+    ])
+    routes = W.delivery_routes(props, 0.14, RULES)
+    assert routes.tolist() == ["grid", "grid", "solar_grow", "solar_grow", "solar_gap", "grid"]
+    # A configured solar threshold replaces the national share.
+    assert W.delivery_routes(props, 0.14, RULES | {"solar_share_min": 0.35})[2] == "solar_gap"
+
+
+def test_share_ranks_put_the_darkest_share_first_and_break_ties_by_count():
+    props = pd.DataFrame({"unserved_hh": [100.0, 600.0, 300.0, 50.0, 10.0],
+                          "households": [1000.0, 1000.0, 500.0, 0.0, 100.0]})
+    share, rank = W.share_ranks(props)
+    assert share.round(2).tolist()[:3] == [0.1, 0.6, 0.6]
+    assert np.isnan(share[3])                     # no households: no share, ranked last
+    assert rank.tolist() == [3, 1, 2, 5, 4]       # 0.6 tie goes to 600 homes before 300
+
+
+def test_rebuild_from_map_keeps_rasters_and_refreshes_wording():
+    layers = [{k: spec[k] for k in W.LAYER_TEXT}
+              | {"name": "old wording", "image": "data:image/png;base64," + spec["key"],
+                 "stops": ["#000000"] * 9, "ticks": [{"t": 0.0, "value": 0.0, "label": "0"}]}
+              for spec in W.LAYERS if spec.get("kind") != "sectors"]
+
+    data = W.rebuild_from_map(built_map(layers), CFG)
+    assert [layer["name"] for layer in data["layers"]] == [s["name"] for s in W.LAYERS]
+    rasters = [layer["image"] for layer in data["layers"] if layer["kind"] == "raster"]
+    assert rasters == [layer["image"] for layer in layers]
+    assert [f["properties"]["route"] for f in data["sectors"]["features"]] == ["solar_gap"] * 2
+    assert data["links"] == W.LINKS
+    # Rebuilding the rebuilt page changes nothing.
+    assert W.rebuild_from_map(W.render_html(data), CFG) == data
+
+
+def test_confidence_notes():
+    props = pd.DataFrame([
+        sector_props(district="A", census_solar=0.74, pred_solar=0.17),   # census and model disagree
+        sector_props(district="B", census_solar=0.20, pred_solar=0.10),   # 10 points: within 15
+        sector_props(district="C", census_solar=None, pred_solar=0.10),   # no census: nothing to compare
+    ])
+    errors = pd.Series({"A": -16.9, "B": 3.0, "C": 8.0})
+    notes = W.confidence_notes(props, errors, {"disagree_pp": 15, "district_error_pp": 8})
+    assert notes[0] == ["The census says 74% of homes here use solar; the model says 17%.",
+                        ("In A district the model under-estimates solar use by 17 percentage "
+                         "points on average.")]
+    assert notes[1] == []
+    assert notes[2] == [("In C district the model over-estimates solar use by 8 percentage "
+                         "points on average.")]
+
+
+def test_model_errors_take_lightgbm_in_unseen_districts(tmp_path):
+    assert W.model_errors(tmp_path) == {}
+    pd.DataFrame({"target": ["solar_share", "solar_share", "solar_share", "grid_share"],
+                  "cv": ["random", "blocked by district_code", "blocked by district_code",
+                         "blocked by district_code"],
+                  "model": ["lightgbm", "linear", "lightgbm", "lightgbm"],
+                  "mae_pp": [7.57, 7.93, 7.9997, 11.325]}).to_csv(tmp_path / "cv_results.csv")
+    assert W.model_errors(tmp_path) == {"solar_share": 8.0, "grid_share": 11.3}
+
+
+def test_survey_since(tmp_path):
+    assert W.survey_since(tmp_path) is None
+    (tmp_path / "dhs_validation.json").write_text(json.dumps(
+        {"survey": "Rwanda DHS 2025", "national": {"solar": 0.196, "grid": 0.539, "none": 0.265}}))
+    assert W.survey_since(tmp_path) == {"survey": "Rwanda DHS 2025", "solar": 0.196, "grid": 0.539,
+                                        "none": 0.265}
+
+
+def test_layer_downloads_skip_metadata_without_its_layer(tmp_path):
+    (tmp_path / "a.yml").write_text("name: Layer A\nfile: a.tif\n")
+    (tmp_path / "a.tif").write_bytes(b"0" * 10)
+    (tmp_path / "b.yml").write_text("name: Layer B\nfile: b.tif\n")     # b.tif missing
+    out = W.layer_downloads(tmp_path)
+    assert [(d["name"], d["bytes"]) for d in out] == [("Layer A", 10)]
+    assert out[0]["url"] == W.REPO + "/raw/main/outputs/a.tif"
+    assert out[0]["meta_url"] == W.REPO + "/blob/main/outputs/a.yml"
+
+
+def test_rebuild_from_map_needs_every_raster_layer():
+    with pytest.raises(ValueError, match="full webmap stage"):
+        W.rebuild_from_map(built_map([]), CFG)
+    with pytest.raises(ValueError, match="no map data"):
+        W.read_map_data("<html></html>")
 
 
 def test_render_html_keeps_data_inside_its_script_block():
@@ -157,6 +290,8 @@ def test_legend_colour_notes_match_the_colour_ramps():
 
     for spec in W.LAYERS:
         assert spec["colour_note"] and spec["table_unit"], spec["key"]
+        if spec.get("kind") == "sectors":      # coloured by route, not by a ramp
+            continue
         low, high = (sum(colormaps[spec["cmap"]](t)[:3]) for t in (0.0, 1.0))
         if high > low:
             assert not spec["colour_note"].startswith("darker"), spec["key"]

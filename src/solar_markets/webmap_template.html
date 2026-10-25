@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>__TITLE__</title>
-<meta name="description" content="Where households in Rwanda have neither grid electricity nor solar: 1 km estimates from the 2022 census and satellite data.">
+<meta name="description" content="Where households in Rwanda have neither grid electricity nor solar, and who could reach them: the grid company, solar companies, or funders where the solar market has not arrived. 1 km estimates from the 2022 census and satellite data.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <style>
@@ -77,16 +77,24 @@
   .seg button { flex: 1; border: 0; background: transparent; padding: 7px; border-radius: 8px; font-size: 14px; }
   .seg button[aria-pressed="true"] { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
-  #toplist { list-style: none; margin: 0; padding: 0; }
+  .field { display: block; font-size: 13px; color: var(--ink-2); margin: 12px 0 4px; }
+  .select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: 14px; color: var(--ink); }
+  #toplist { list-style: none; margin: 8px 0 0; padding: 0; }
   #toplist li button { display: flex; gap: 10px; width: 100%; align-items: baseline; text-align: left; border: 0; background: transparent; padding: 7px 6px; border-radius: 8px; }
   #toplist li button:hover { background: #f0f2f5; }
   #toplist .n { width: 22px; height: 22px; border-radius: 50%; background: var(--none); color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; align-self: center; }
   #toplist .hh { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
   #toplist .d { color: var(--muted); font-size: 12.5px; }
+  #toplist .d i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
   .about { font-size: 13.5px; color: var(--ink-2); }
   .about a { color: var(--focus); }
   .linkbtn { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 12px; font-size: 14px; }
   .linkbtn:hover { background: #f5f6f8; }
+  .linkbtn.wide { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 600; }
+  #files { list-style: none; margin: 10px 0 0; padding: 0; }
+  #files li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+  #files li span { display: block; color: var(--muted); font-size: 12.5px; }
+  #files a { color: var(--focus); }
   #btn-panel { position: fixed; z-index: 1000; top: 72px; left: 12px; display: none; align-items: center; gap: 8px; border: 0; padding: 10px 14px; font-weight: 600; }
   body.panel-collapsed #panel { display: none; }
   body.panel-collapsed #btn-panel { display: flex; }
@@ -97,7 +105,8 @@
   #controls button { width: 44px; height: 44px; border: 0; background: #fff; display: grid; place-items: center; color: var(--ink); }
   #controls button:hover { background: #f0f2f5; }
   #controls .group button + button { border-top: 1px solid var(--line); }
-  #btn-locate.busy svg { animation: spin 1s linear infinite; }
+  #btn-locate .busy-icon, #btn-locate.busy .idle-icon { display: none; }
+  #btn-locate.busy .busy-icon { display: block; color: var(--focus); animation: spin .9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ---------- legend ---------- */
@@ -107,6 +116,11 @@
   #legend .bar { height: 12px; border-radius: 6px; margin: 8px 0 4px; }
   #legend .ticks { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
   #legend .note { font-size: 12px; color: var(--muted); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+  #legend .routes { list-style: none; margin: 8px 0 2px; padding: 0; display: grid; gap: 7px; }
+  #legend .routes li { display: grid; grid-template-columns: 14px 1fr auto; gap: 1px 8px; align-items: baseline; font-size: 13px; }
+  #legend .routes .sw { width: 14px; height: 14px; border-radius: 4px; align-self: center; }
+  #legend .routes .n { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
+  #legend .routes small { grid-column: 2 / 4; color: var(--muted); font-size: 12px; }
   .pin-key { width: 16px; height: 16px; border-radius: 50%; background: var(--none); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--none); flex: none; }
 
   /* ---------- top-10 pins and location ---------- */
@@ -154,24 +168,44 @@
   table.clues tr.active td { font-weight: 700; }
   table.clues .unit { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .route-card { display: flex; gap: 10px; align-items: flex-start; }
+  .route-card .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 4px; }
+  .route-card b { display: block; font-size: 15px; }
+  .route-card span { font-size: 13px; color: var(--ink-2); }
+  .route-why { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 0; }
+  .sure { display: inline-block; font-size: 13px; font-weight: 650; border-radius: 99px; padding: 3px 10px; }
+  .sure.check { background: #fdf1e2; color: #8a4b00; }
+  ul.checks { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
+  ul.checks li { margin: 3px 0; }
+  a.linkbtn { color: var(--ink); text-decoration: none; display: inline-block; }
+  .dash-key { width: 18px; height: 0; border-top: 2px dashed #8a4b00; flex: none; }
 
   /* ---------- mobile summary chip ---------- */
   #chip { display: none; }
 
   /* ---------- toast ---------- */
-  #toast { position: fixed; z-index: 2000; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .2s; max-width: calc(100% - 32px); }
+  #toast { position: fixed; z-index: 2000; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: .2s; width: max-content; max-width: min(480px, calc(100% - 32px)); display: flex; align-items: flex-start; gap: 10px; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.show.has-close { pointer-events: auto; }
+  #toast button { border: 0; background: transparent; color: #fff; width: 28px; height: 28px; margin: -4px -8px -4px 0; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  #toast button:hover { background: rgba(255,255,255,.15); }
 
   /* ---------- guided tour ---------- */
   #tour { position: fixed; inset: 0; z-index: 3000; display: none; }
   #tour.show { display: block; }
   #tour .shade { position: absolute; inset: 0; background: rgba(12,20,38,.55); }
   #tour .spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(12,20,38,.55); outline: 3px solid #fff; transition: all .25s; pointer-events: none; }
-  #tour .tcard { position: absolute; width: min(360px, calc(100% - 24px)); padding: 18px 18px 14px; }
+  #tour .tcard { position: absolute; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; padding: 16px 18px 14px; }
+  #tour .progress { margin: 0 0 8px; }
   #tour .tcard h2 { margin: 0 0 6px; font-size: 18px; }
   #tour .tcard p { margin: 0 0 12px; color: var(--ink-2); }
-  #tour .tnav { display: flex; align-items: center; gap: 8px; }
-  #tour .dots { display: flex; gap: 5px; margin-right: auto; }
+  /* buttons wrap rather than spill out of the card on narrow screens */
+  #tour .tnav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  #tour .tnav #tour-skip { margin-right: auto; }
+  #tour .btn { min-height: 40px; }
+  #tour .dots { display: flex; flex-wrap: wrap; gap: 5px; }
+  /* the guide sets an open details card aside so the parts it points at stay visible */
+  body.touring:not(.tour-card) #info { display: none !important; }
   #tour .dots i { width: 7px; height: 7px; border-radius: 50%; background: #d3d7e0; }
   #tour .dots i.on { background: var(--accent); }
   .btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 600; white-space: nowrap; }
@@ -197,7 +231,7 @@
     #controls { top: calc(max(10px, env(safe-area-inset-top)) + 58px); right: 10px; }
     #controls .zoom { display: none; }
     #legend { left: 10px; right: 80px; width: auto; bottom: max(18px, env(safe-area-inset-bottom)); padding: 9px 12px; }
-    #legend .note { display: none; }
+    #legend .note, #legend .routes small { display: none; }
     #legend .note.colour { display: flex; margin-top: 4px; }
     #info { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 62vh; border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); }
     #info.tall { max-height: 88vh; }
@@ -205,8 +239,14 @@
     #info .handle i { display: block; width: 40px; height: 5px; border-radius: 3px; background: #cfd3db; margin: 0 auto; }
     #info header { top: 0; }
     body.info-open #legend, body.info-open #btn-panel { display: none !important; }
-    #toast { bottom: 96px; }
+    body.info-open.touring:not(.tour-card) #legend { display: block !important; }
+    body.info-open.touring:not(.tour-card) #btn-panel { display: flex !important; }
+    /* under the search box and left of the map buttons, so the details sheet never covers it */
+    #toast { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 10px; right: 66px; width: auto; max-width: none; transform: translateY(-12px); }
+    #toast.show { transform: none; }
     #tour .tcard { left: 12px !important; right: 12px; width: auto; }
+    #tour .btn { min-height: 44px; }
+    #tour .tnav .primary { flex: 1 1 auto; }   /* a full, easy-to-tap "Next" / "Start exploring" */
     .leaflet-control-attribution { font-size: 9px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -242,7 +282,7 @@
     </button>
     <div style="flex:1">
       <h1 id="app-title"></h1>
-      <p>Where households have neither grid nor solar &middot; 1 km estimates</p>
+      <p>Where households have neither grid nor solar, and who could reach them &middot; 1 km estimates</p>
     </div>
     <button class="iconbtn collapse" id="btn-collapse" aria-label="Hide panel">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18 9 12l6-6"/></svg>
@@ -255,10 +295,12 @@
     </section>
     <section id="sec-show" aria-labelledby="h-show">
       <h2 id="h-show">On the map</h2>
-      <div class="toggle"><div>Top 10 priority sectors<small>Numbered pins on the underserved layer</small></div>
-        <label class="switch"><input type="checkbox" id="t-top" checked aria-label="Show top 10 priority sectors"><span></span></label></div>
+      <div class="toggle"><div>Priority pins<small>The numbered priority list, on the underserved and route layers</small></div>
+        <label class="switch"><input type="checkbox" id="t-top" checked aria-label="Show the priority list as numbered pins"><span></span></label></div>
       <div class="toggle"><div>Sector borders</div>
         <label class="switch"><input type="checkbox" id="t-borders" checked aria-label="Show sector borders"><span></span></label></div>
+      <div class="toggle"><div>Sectors to check first<small>Dashed borders where the census and the model disagree, or the district is off</small></div>
+        <label class="switch"><input type="checkbox" id="t-checks" aria-label="Mark sectors to check on the ground first"><span></span></label></div>
       <div class="toggle"><div>Place names</div>
         <label class="switch"><input type="checkbox" id="t-labels" checked aria-label="Show place names"><span></span></label></div>
       <div class="toggle" style="display:block"><div style="display:flex;justify-content:space-between"><span>Layer opacity</span><span id="op-val">80%</span></div>
@@ -267,9 +309,25 @@
       <div class="seg" id="basemap-seg" role="group" aria-label="Background map"></div>
     </section>
     <section id="sec-top" aria-labelledby="h-top">
-      <h2 id="h-top">Top 10 priority sectors</h2>
+      <h2 id="h-top">Priority sectors</h2>
+      <div class="seg" id="rank-seg" role="group" aria-label="Rank sectors by">
+        <button data-key="count" aria-pressed="true">Most homes</button>
+        <button data-key="share" aria-pressed="false">Highest share</button>
+      </div>
+      <label class="field" for="route-filter">Who should serve them</label>
+      <select class="select" id="route-filter"></select>
       <ol id="toplist"></ol>
-      <p class="fine">Ranked by estimated households with neither grid nor solar. A shortlist for field checks, not a final decision.</p>
+      <p class="fine" id="top-note"></p>
+    </section>
+    <section id="sec-download" aria-labelledby="h-download">
+      <h2 id="h-download">Take the data with you</h2>
+      <button class="linkbtn wide" id="btn-csv">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        <span id="csv-label">Download sectors (CSV)</span>
+      </button>
+      <p class="fine">Every sector in the priority list above, in its order, with its route, ranks, census and model shares, clues and a map link. Opens in Excel.</p>
+      <ul id="files" aria-label="Map layers for GIS and the Energy Access Explorer"></ul>
+      <p class="fine" id="licence"></p>
     </section>
     <section aria-labelledby="h-about">
       <h2 id="h-about">About this map</h2>
@@ -285,7 +343,7 @@
     <button id="btn-zoom-out" aria-label="Zoom out"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
   </div>
   <div class="group card">
-    <button id="btn-locate" aria-label="Show my location and my sector"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <button id="btn-locate" aria-label="Show my location and my sector"><svg class="icon idle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><svg class="icon busy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg></button>
     <button id="btn-home" aria-label="Show all of Rwanda"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button id="btn-help" aria-label="Open the guide"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/></svg></button>
   </div>
@@ -301,10 +359,10 @@
   <div class="shade"></div>
   <div class="spot"></div>
   <div class="tcard card">
+    <div class="progress"><div class="dots" aria-hidden="true"></div></div>
     <h2 id="tour-title"></h2>
     <p id="tour-text"></p>
     <div class="tnav">
-      <div class="dots" aria-hidden="true"></div>
       <button class="btn ghost" id="tour-skip">Skip</button>
       <button class="btn ghost" id="tour-back">Back</button>
       <button class="btn primary" id="tour-next">Next</button>
@@ -353,10 +411,15 @@
 
   // ---------------------------------------------------------- state
   var LAYERS = {}; D.layers.forEach(function (l) { LAYERS[l.key] = l; });
+  var ROUTES = {}; D.routes.forEach(function (r) { ROUTES[r.key] = r; });
+  var TOP_N = D.top.length || 10;
   var state = { layer: D.default_layer, basemap: D.default_basemap, opacity: 0.8,
-                top: true, borders: true, labels: true, selected: null, you: null };
+                top: true, borders: true, labels: true, selected: null, you: null,
+                rank: "count", route: "all", checks: false };   // rank: "count" or "share"; route: "all" or a route key
   var hash = new URLSearchParams(location.hash.replace(/^#/, ""));
   if (LAYERS[hash.get("layer")]) state.layer = hash.get("layer");
+  if (hash.get("rank") === "share") state.rank = "share";
+  if (ROUTES[hash.get("route")]) state.route = hash.get("route");
 
   // ---------------------------------------------------------- map
   var bounds = L.latLngBounds(D.bounds);
@@ -395,14 +458,23 @@
     });
   }
 
-  var raster = L.imageOverlay(LAYERS[state.layer].image, bounds,
+  // Raster layers show an image; a "sectors" layer (who should serve them) colours the sectors.
+  var firstImage = D.layers.filter(function (l) { return l.image; })[0].image;
+  var raster = L.imageOverlay(LAYERS[state.layer].image || firstImage, bounds,
                               { opacity: state.opacity, className: "raster", interactive: false }).addTo(map);
 
   // sectors
   var byId = {};
-  var sectorStyle = function () {
-    return { color: "#1f2a44", weight: state.borders ? 0.6 : 0, opacity: 0.55, fill: true, fillColor: "#000", fillOpacity: 0 };
+  var SELECTED = { color: "#0b63ce", weight: 3, opacity: 1, dashArray: null };
+  var sectorStyle = function (f) {
+    var route = LAYERS[state.layer].kind === "sectors" && f && ROUTES[f.properties.route];
+    var faded = route && state.route !== "all" && f.properties.route !== state.route;   // filtered out of the list
+    var check = state.checks && f && f.properties.checks && f.properties.checks.length > 0;
+    return { color: check ? "#8a4b00" : "#1f2a44", weight: check ? 1.8 : state.borders ? 0.6 : 0, opacity: check ? 0.95 : 0.55,
+             dashArray: check ? "5 4" : null, fill: true,
+             fillColor: route ? route.colour : "#000", fillOpacity: route ? (faded ? 0.2 : 0.85) * state.opacity : 0 };
   };
+  function restyle(id) { if (byId[id]) byId[id].setStyle(id === state.selected ? SELECTED : sectorStyle(byId[id].feature)); }
   var sectors = L.geoJSON(D.sectors, {
     pane: "sectors",
     style: sectorStyle,
@@ -410,27 +482,51 @@
       byId[f.properties.id] = layer;
       layer.on("click", function () { select(f.properties.id, { fly: false }); });
       layer.on("mouseover", function () { if (state.selected !== f.properties.id) layer.setStyle({ weight: 2, opacity: 0.9 }); });
-      layer.on("mouseout", function () { if (state.selected !== f.properties.id) layer.setStyle(sectorStyle()); });
+      layer.on("mouseout", function () { if (state.selected !== f.properties.id) layer.setStyle(sectorStyle(f)); });
       if (!isMobile()) layer.bindTooltip(esc(f.properties.sector) + " <span style='font-weight:400;color:#6b7489'>" + esc(f.properties.district) + "</span>",
                                          { className: "sector-tip", sticky: true, direction: "top", offset: [0, -8] });
     }
   }).addTo(map);
   var props = function (id) { return byId[id] ? byId[id].feature.properties : null; };
 
-  // top-10 pins
+  // priority list (ranked by number or share of homes without light, optionally one route) and its pins
   var topPins = L.layerGroup();
-  D.top.forEach(function (id) {
-    var p = props(id), layer = byId[id];
-    if (!p) return;
-    var ll = p.pt ? L.latLng(p.pt[0], p.pt[1]) : layer.getBounds().getCenter();
-    L.marker(ll, { icon: L.divIcon({ className: "rank-pin", html: "<span>" + p.rank + "</span>", iconSize: [28, 28] }),
-                   title: "#" + p.rank + " " + p.sector + " (" + p.district + ")", keyboard: true, riseOnHover: true })
-      .on("click", function () { select(id, { fly: true }); }).addTo(topPins);
-  });
+  function priorityList() {
+    var key = state.rank === "share" ? "rank_share" : "rank";
+    return allProps.filter(function (p) { return state.route === "all" || p.route === state.route; })
+                   .sort(function (a, b) { return a[key] - b[key]; });
+  }
+  var pinLayer = function () { return state.layer === "underserved" || state.layer === "route"; };
+  var pinsShown = function () { return state.top && pinLayer(); };
   function syncPins() {
-    var on = state.top && state.layer === "underserved";
-    if (on) topPins.addTo(map); else map.removeLayer(topPins);
-    $("t-top").disabled = state.layer !== "underserved";
+    if (pinsShown()) topPins.addTo(map); else map.removeLayer(topPins);
+    $("t-top").disabled = !pinLayer();
+  }
+  function renderTop() {
+    var list = priorityList(), top = list.slice(0, TOP_N), share = state.rank === "share";
+    topPins.clearLayers();
+    top.forEach(function (p, i) {
+      var ll = p.pt ? L.latLng(p.pt[0], p.pt[1]) : byId[p.id].getBounds().getCenter();
+      L.marker(ll, { icon: L.divIcon({ className: "rank-pin", html: "<span>" + (i + 1) + "</span>", iconSize: [28, 28] }),
+                     title: (i + 1) + ". " + p.sector + " (" + p.district + ")", keyboard: true, riseOnHover: true })
+        .on("click", function () { select(p.id, { fly: true }); }).addTo(topPins);
+    });
+    $("toplist").innerHTML = top.map(function (p, i) {
+      var r = ROUTES[p.route];
+      return '<li><button data-id="' + p.id + '"><span class="n">' + (i + 1) + "</span><span><b>" + esc(p.sector) + '</b><br><span class="d">' +
+             esc(p.district) + ' &middot; <i style="background:' + r.colour + '"></i>' + esc(r.short) + '</span></span><span class="hh">' +
+             (share ? fmt(p.unserved_share, "pct") : fmt(p.unserved_hh, "int") + " homes") + "</span></button></li>";
+    }).join("");
+    $("toplist").querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () { if (!pinLayer()) setLayer("underserved"); closeSettings(); select(+b.dataset.id, { fly: true }); });
+    });
+    $("top-note").textContent = (share ? "Ranked by the share of homes with neither grid nor solar, so small, remote sectors come up."
+                                       : "Ranked by the number of homes with neither grid nor solar, so large sectors come first.") +
+      (state.route === "all" ? "" : " Showing " + list.length + " " + ROUTES[state.route].name.toLowerCase() + " sectors.") +
+      " A shortlist for field checks, not a final decision.";
+    $("rank-seg").querySelectorAll("button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.key === state.rank ? "true" : "false"); });
+    $("route-filter").value = state.route;
+    $("csv-label").textContent = "Download " + list.length + " sectors (CSV)";
   }
 
   // ---------------------------------------------------------- statistics for comparisons
@@ -464,18 +560,40 @@
   function setLayer(key) {
     if (!LAYERS[key]) return;
     state.layer = key;
-    raster.setUrl(LAYERS[key].image);
+    if (LAYERS[key].image) raster.setUrl(LAYERS[key].image);
+    applyOpacity();
     $("layer-list").querySelectorAll(".layer").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.key === key ? "true" : "false"); });
     renderLegend(); syncPins(); renderChip(); writeHash();
     if (state.selected !== null) renderInfo(state.selected);
   }
+  function applyOpacity() {
+    raster.setOpacity(LAYERS[state.layer].image ? state.opacity : 0);
+    sectors.setStyle(sectorStyle);
+    if (state.selected !== null) restyle(state.selected);
+  }
+  var nChecks = D.sectors.features.filter(function (f) { return f.properties.checks && f.properties.checks.length; }).length;
+  function checksNote() {
+    return state.checks ? '<div class="note"><span class="dash-key"></span>Dashed borders: check on the ground first (' + nChecks + " sectors)</div>" : "";
+  }
   function renderLegend() {
     var l = LAYERS[state.layer];
+    if (l.kind === "sectors") {
+      $("legend").innerHTML =
+        '<div class="t">' + esc(l.name) + '</div><div class="u">Homes with neither grid nor solar, by who could reach them</div>' +
+        '<ul class="routes">' + D.routes.map(function (r) {
+          return '<li><span class="sw" style="background:' + r.colour + '"></span><b>' + esc(r.name) + '</b><span class="n">' +
+                 fmt(r.unserved_hh, "int") + " homes</span><small>" + esc(r.who) + " &middot; " + r.sectors + " sectors</small></li>";
+        }).join("") + "</ul>" +
+        (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") + checksNote() +
+        '<div class="note">Click a sector to see why it has its colour</div>';
+      document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
+      return;
+    }
     $("legend").innerHTML =
       '<div class="t">' + esc(l.name) + '</div><div class="u">' + esc(l.unit) + " &middot; " + esc(l.short) + "</div>" +
       '<div class="bar" style="background:' + gradient(l.stops) + '"></div>' +
       '<div class="ticks">' + l.ticks.map(function (t) { return "<span>" + esc(t.label) + "</span>"; }).join("") + "</div>" +
-      (state.layer === "underserved" && state.top ? '<div class="note"><span class="pin-key"></span>Numbered pins: top 10 priority sectors</div>' : "") +
+      (pinsShown() ? '<div class="note"><span class="pin-key"></span>Numbered pins: the priority list</div>' : "") + checksNote() +
       '<div class="note colour">Colours: ' + esc(l.colour_note) + "</div>" +
       '<div class="note">Click a sector for its numbers</div>';
     document.documentElement.style.setProperty("--legend-h", $("legend").offsetHeight + "px");
@@ -483,7 +601,7 @@
   function renderChip() {
     var l = LAYERS[state.layer];
     $("chip").innerHTML = '<span class="ramp" style="background:' + gradient(l.stops) + '"></span>' +
-      '<span class="txt">' + esc(l.name) + (state.layer === "underserved" && state.top ? " <small>&middot; top 10 shown</small>" : "") +
+      '<span class="txt">' + esc(l.name) + (pinsShown() ? " <small>&middot; top 10 shown</small>" : "") +
       (state.basemap === "satellite" ? " <small>&middot; satellite</small>" : "") + "</span>";
   }
 
@@ -494,17 +612,19 @@
   function select(id, opts) {
     var p = props(id);
     if (!p) return;
-    if (state.selected !== null && byId[state.selected]) byId[state.selected].setStyle(sectorStyle());
+    var previous = state.selected;
     state.selected = id;
-    byId[id].setStyle({ color: "#0b63ce", weight: 3, opacity: 1 });
+    if (previous !== null) restyle(previous);
+    byId[id].setStyle(SELECTED);
     byId[id].bringToFront();
     if (opts && opts.fly) map.flyToBounds(byId[id].getBounds(), Object.assign({ maxZoom: 12, duration: 0.6 }, fitPadding(true)));
     renderInfo(id, opts && opts.here);
     writeHash();
   }
   function closeInfo() {
-    if (state.selected !== null && byId[state.selected]) byId[state.selected].setStyle(sectorStyle());
+    var previous = state.selected;
     state.selected = null;
+    if (previous !== null) restyle(previous);
     $("info").classList.remove("show", "tall");
     document.body.classList.remove("info-open");
     writeHash();
@@ -521,19 +641,57 @@
     else txt += " &middot; lower than " + pct(r.above) + "% of sectors";
     return txt;
   }
+  function routeSection(p) {
+    var r = ROUTES[p.route], R = D.route_rules;
+    if (!r) return "";
+    var grid = p.census_grid !== null ? p.census_grid : p.pred_grid;
+    var sol = p.census_solar !== null ? p.census_solar : p.pred_solar;
+    var line = " use the grid, and people live " + fmt(p.dist_grid, "num1") + " km from a line on average.";
+    var why = p.route === "grid" ? fmt(grid, "pct") + " of homes" + line
+      : (grid < 0.005 ? "Almost no homes" : "Only " + fmt(grid, "pct") + " of homes") + line + " Solar lights " + fmt(sol, "pct") + " of homes, " +
+        (p.route === "solar_grow" ? "at least" : "below") + " the national " + fmt(R.solar_share_min, "pct") + ".";
+    return '<div class="sec"><h3>Who should serve these homes</h3>' +
+      '<div class="route-card"><span class="sw" style="background:' + r.colour + '"></span><div><b>' + esc(r.name) + "</b><span>" + esc(r.who) + "</span></div></div>" +
+      '<p class="route-why">' + esc(why) + " " + esc(r.description) + "</p></div>";
+  }
+  function sinceText() {
+    return D.since ? "Solar has grown since 2022: the " + D.since.survey + " survey finds " + fmt(D.since.solar, "pct") +
+      " of homes lit by solar nationally, against " + fmt(D.calibration.target_share, "pct") + " in the census." : "";
+  }
+  function reportUrl(p) {   // a GitHub issue form with the sector filled in (field ids in .github/ISSUE_TEMPLATE/field_check.yml)
+    return D.feedback_url + (D.feedback_url.indexOf("?") < 0 ? "?" : "&") +
+      "title=" + encodeURIComponent("[Field check]: " + p.sector + " (" + p.district + ")") +
+      "&sector=" + encodeURIComponent(p.sector + ", " + p.district) + "&layer=" + encodeURIComponent(LAYERS[state.layer].name) +
+      "&link=" + encodeURIComponent(location.href.split("#")[0] + "#layer=" + state.layer + "&sector=" + p.id);
+  }
+  function sureSection(p) {
+    var check = p.checks && p.checks.length > 0;
+    return '<div class="sec"><h3>How sure are we</h3>' +
+      (check ? '<span class="sure check">Check on the ground first</span><ul class="checks">' +
+               p.checks.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul>" : "") +
+      '<p class="fine">Estimates from the 2022 census and satellite data. Use them to shortlist places to visit, not as final decisions. ' +
+      esc(sinceText()) + "</p>" +
+      '<div class="actions"><button class="linkbtn" id="btn-copy">Copy link to this sector</button>' +
+      (D.feedback_url ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(reportUrl(p)) + '">Report a correction</a>' : "") + "</div>" +
+      (D.feedback_url ? '<p class="fine">"Report a correction" opens a public GitHub form (you need a GitHub account). Please leave out names and phone numbers.</p>' : "") +
+      "</div>";
+  }
   function renderInfo(id, here) {
     var p = props(id), l = LAYERS[state.layer];
     if (!p) return;
     var value = p[l.metric];
-    var head = '<div class="headline" style="border-color:' + l.stops[6] + '">' +
+    var edge = l.kind === "sectors" ? (ROUTES[p.route] || {}).colour : l.stops[6];
+    var head = '<div class="headline" style="border-color:' + edge + '">' +
       '<div class="big">' + fmt(value, l.format) + "</div>" +
       '<div class="lbl">' + esc(l.metric_label) + "</div>" +
       '<div class="cmp">' + compareLine(l, p) + "</div></div>";
-    if (state.layer === "underserved") {
-      head += '<div class="rankline">Priority rank <b>#' + p.rank + "</b> of " + D.n_sectors + " sectors" +
-              (p.census_unserved !== null ? " &middot; census: " + fmt(p.census_unserved, "pct") + " of homes" : "") + "</div>";
-    } else if (state.layer === "penetration" && p.census_solar !== null) {
-      head += '<div class="rankline">Census 2022: <b style="color:var(--ink)">' + fmt(p.census_solar, "pct") + "</b> of homes lit by solar</div>";
+    if (pinLayer()) {
+      head += '<div class="rankline">Priority rank <b>#' + p.rank + "</b> by number of homes, <b>#" + p.rank_share + "</b> by share (" +
+              fmt(p.unserved_share, "pct") + "), of " + D.n_sectors + " sectors</div>";
+    }
+    if (state.layer === "penetration" && p.census_solar !== null) {
+      head += '<div class="rankline">Census 2022: <b style="color:var(--ink)">' + fmt(p.census_solar, "pct") + "</b> of homes lit by solar" +
+              (D.since ? " &middot; " + esc(D.since.survey) + ": " + fmt(D.since.solar, "pct") + " nationally" : "") + "</div>";
     } else if (state.layer === "pop" && p.population !== null) {
       head += '<div class="rankline">' + fmt(p.population, "int") + " people in " + fmt(p.area_km2, "num1") + " km² &middot; about " + fmt(p.households, "int") + " households</div>";
     }
@@ -575,17 +733,13 @@
                "</td><td>" + fmt(D.medians[r[0]], lk.format) + "</td></tr>";
       }).join("") + '</tbody></table><p class="fine">Tap a row to show that layer. Clues are averages where people live.</p></div>';
 
-    var foot = '<div class="sec"><p class="fine" style="margin-top:0">Estimates from the 2022 census and satellite data. In a district the model has not seen, ' +
-      'solar shares are about 8 points off on average and grid shares about 11. ' +
-      'Use them to shortlist places to visit, not as final decisions.</p><div class="actions">' +
-      '<button class="linkbtn" id="btn-copy">Copy link to this sector</button></div></div>';
 
     $("info").innerHTML =
       '<button class="handle" id="info-handle" aria-label="Expand or shrink details"><i></i></button>' +
       "<header><div>" + (here ? '<div class="you-badge">You are here</div>' : "") +
       '<div class="kicker">Sector &middot; ' + esc(p.district) + " district</div><h2>" + esc(p.sector) + "</h2></div>" +
       '<button id="info-close" aria-label="Close details"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>' +
-      '<div class="sec">' + head + "</div>" + lit + model + drivers + clues + foot;
+      '<div class="sec">' + head + "</div>" + routeSection(p) + sureSection(p) + lit + model + drivers + clues;
     $("info").classList.add("show");
     $("info").scrollTop = 0;
     document.body.classList.add("info-open");
@@ -611,7 +765,8 @@
 
   // ---------------------------------------------------------- hash and links
   function writeHash() {
-    var h = "layer=" + state.layer + (state.selected !== null ? "&sector=" + state.selected : "");
+    var h = "layer=" + state.layer + (state.rank !== "count" ? "&rank=" + state.rank : "") +
+            (state.route !== "all" ? "&route=" + state.route : "") + (state.selected !== null ? "&sector=" + state.selected : "");
     try { history.replaceState(null, "", "#" + h); } catch (e) { /* file:// in some browsers */ }
   }
   function copyLink() {
@@ -707,7 +862,11 @@
   }
   function goToPoint(ll, here) {
     var id = sectorAt(ll);
-    if (id === null) { toast("That point is outside Rwanda's sectors. This map covers Rwanda only."); return false; }
+    if (id === null) {
+      toast(here ? "You seem to be outside Rwanda. This map covers Rwanda only; search a sector to explore it."
+                 : "That point is outside Rwanda's sectors. This map covers Rwanda only.", { ms: 9000, close: true });
+      return false;
+    }
     if (state.you) map.removeLayer(state.you);
     state.you = L.marker(ll, { icon: L.divIcon({ className: "", html: '<div class="you"></div>', iconSize: [18, 18] }),
                                title: here ? "Your location" : "Searched point", keyboard: false }).addTo(map);
@@ -715,19 +874,59 @@
     select(id, { fly: false, here: here });
     return true;
   }
-  $("btn-locate").addEventListener("click", function () {
-    var btn = this;
-    if (!navigator.geolocation) { toast("Your browser cannot share its location."); return; }
-    btn.classList.add("busy");
-    navigator.geolocation.getCurrentPosition(function (pos) {
-      btn.classList.remove("busy");
-      goToPoint(L.latLng(pos.coords.latitude, pos.coords.longitude), true);
-    }, function (err) {
-      btn.classList.remove("busy");
-      toast(err.code === 1 ? "Location permission was refused. Allow it in your browser to find your sector."
-            : "Could not find your location. Try again outdoors or search your sector instead.");
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
-  });
+  // The browser's own timeout only starts once permission is given, so a prompt that is missed or
+  // never shown would leave the button spinning in silence; the watchdog below always answers.
+  var LOCATE_WAIT_MS = 20000;
+  var LOCATE_MSG = {
+    insecure: "Location only works on a secure page (https) or on this computer (localhost). On a phone, open the published map, or search your sector instead.",
+    denied: "Location is blocked for this page. Allow it in your browser's site settings (the icon left of the address), then try again. On a Mac, also allow your browser in System Settings > Privacy & Security > Location Services.",
+    unavailable: "Your device could not find its position. Turn on location services (on a Mac: System Settings > Privacy & Security > Location Services), or search your sector instead.",
+    slow: "Finding your location took too long. Try again, or search your sector instead.",
+    noAnswer: "No answer from your browser. Look for a location prompt near the address bar, or search your sector instead."
+  };
+  var locating = null;   // the request in progress
+  function locateDone(req, msg) {
+    req.done = true;
+    clearTimeout(req.timer);
+    if (locating === req) locating = null;
+    $("btn-locate").classList.remove("busy");
+    $("btn-locate").removeAttribute("aria-busy");
+    if (msg) toast(msg, { ms: 12000, close: true }); else hideToast();
+  }
+  function locate() {
+    if (locating) { toast("Still finding your location…", { ms: 0 }); return; }
+    if (!navigator.geolocation) { toast("This browser cannot share its location. Search your sector instead.", { ms: 9000, close: true }); return; }
+    if (!window.isSecureContext) { toast(LOCATE_MSG.insecure, { ms: 12000, close: true }); return; }
+    var req = locating = { done: false, waited: false };
+    $("btn-locate").classList.add("busy");
+    $("btn-locate").setAttribute("aria-busy", "true");
+    toast("Finding your location…", { ms: 0 });
+    req.timer = setTimeout(function () {   // keep listening: a late "allow" still takes you there
+      if (req.done) return;
+      req.waited = true;
+      locateDone(req, LOCATE_MSG.noAnswer);
+      req.done = false;
+    }, LOCATE_WAIT_MS);
+    var ask = function () {
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        if (req.done) return;
+        locateDone(req);
+        goToPoint(L.latLng(pos.coords.latitude, pos.coords.longitude), true);
+      }, function (err) {
+        if (req.done || req.waited) return;
+        locateDone(req, err.code === 1 ? LOCATE_MSG.denied : err.code === 3 ? LOCATE_MSG.slow : LOCATE_MSG.unavailable);
+      }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+    };
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: "geolocation" }).then(function (p) {
+        if (req.done || req.waited) return;
+        if (p.state === "denied") locateDone(req, LOCATE_MSG.denied); else ask();
+      }, ask);
+    } else {
+      ask();
+    }
+  }
+  $("btn-locate").addEventListener("click", locate);
 
   // ---------------------------------------------------------- panel, settings, controls
   function openSettings() { if (isMobile()) { document.body.classList.add("settings-open"); $("btn-back").focus(); } else { document.body.classList.remove("panel-collapsed"); } }
@@ -740,21 +939,21 @@
   $("btn-zoom-out").addEventListener("click", function () { map.zoomOut(); });
   $("btn-home").addEventListener("click", function () { closeInfo(); showRwanda(); });
   $("t-top").addEventListener("change", function () { state.top = this.checked; syncPins(); renderLegend(); renderChip(); });
-  $("t-borders").addEventListener("change", function () { state.borders = this.checked; sectors.setStyle(sectorStyle); if (state.selected !== null) byId[state.selected].setStyle({ color: "#0b63ce", weight: 3, opacity: 1 }); });
+  $("t-borders").addEventListener("change", function () { state.borders = this.checked; applyOpacity(); });
+  $("t-checks").addEventListener("change", function () { state.checks = this.checked; applyOpacity(); renderLegend(); });
   $("t-labels").addEventListener("change", function () { state.labels = this.checked; if (this.checked) labels.addTo(map); else map.removeLayer(labels); });
-  $("t-opacity").addEventListener("input", function () { state.opacity = this.value / 100; raster.setOpacity(state.opacity); $("op-val").textContent = this.value + "%"; });
+  $("t-opacity").addEventListener("input", function () { state.opacity = this.value / 100; applyOpacity(); $("op-val").textContent = this.value + "%"; });
   $("basemap-seg").innerHTML = Object.keys(D.basemaps).map(function (k) {
     return '<button data-key="' + k + '" aria-pressed="false">' + esc(D.basemaps[k].name) + "</button>";
   }).join("");
   $("basemap-seg").querySelectorAll("button").forEach(function (b) { b.addEventListener("click", function () { setBasemap(b.dataset.key); renderChip(); }); });
 
-  $("toplist").innerHTML = D.top.map(function (id) {
-    var p = props(id);
-    return '<li><button data-id="' + id + '"><span class="n">' + p.rank + "</span><span><b>" + esc(p.sector) + '</b><br><span class="d">' + esc(p.district) + "</span></span>" +
-           '<span class="hh">' + fmt(p.unserved_hh, "int") + " hh</span></button></li>";
+  $("route-filter").innerHTML = '<option value="all">All routes (' + D.n_sectors + " sectors)</option>" + D.routes.map(function (r) {
+    return '<option value="' + r.key + '">' + esc(r.name) + " (" + r.sectors + ")</option>";
   }).join("");
-  $("toplist").querySelectorAll("button").forEach(function (b) {
-    b.addEventListener("click", function () { if (state.layer !== "underserved") setLayer("underserved"); closeSettings(); select(+b.dataset.id, { fly: true }); });
+  $("route-filter").addEventListener("change", function () { state.route = this.value; renderTop(); applyOpacity(); writeHash(); });
+  $("rank-seg").querySelectorAll("button").forEach(function (b) {
+    b.addEventListener("click", function () { state.rank = b.dataset.key; renderTop(); writeHash(); });
   });
 
   $("app-title").textContent = D.title;
@@ -762,56 +961,140 @@
     "<p>Funders need to know where families still have no electric light. Night-time satellite images cannot tell a village lit by small solar lamps from one with no light at all. " +
     "This map combines the " + esc(D.country) + " census " + esc(D.year) + " with six satellite and open-data clues to estimate, for every square kilometre, where homes have neither grid electricity nor solar.</p>" +
     "<p>About <b>" + fmt(D.totals.unserved_hh, "int") + "</b> of " + fmt(D.totals.households, "int") + " households had neither in 2022 (model estimate). " +
-    "In a district the model has not seen, solar shares are about 8 percentage points off on average and grid shares about 11.</p>" +
+    "The <i>Who should serve them</i> layer splits them between the grid company, solar companies already selling there, and places the solar market has not reached. " +
+    esc(sinceText()) + "</p>" +
     '<p><a href="' + D.links.limitations + '" target="_blank" rel="noopener">What the map cannot see</a> &middot; ' +
+    '<a href="' + D.links.user_gaps + '" target="_blank" rel="noopener">Who the map is for</a> &middot; ' +
     '<a href="' + D.links.repo + '" target="_blank" rel="noopener">Code and data sources</a></p>';
+
+  // ---------------------------------------------------------- downloads
+  var CSV_COLUMNS = [   // [column, value for a sector p at position i of the priority list]
+    ["priority", function (p, i) { return i + 1; }], ["sector", "sector"], ["district", "district"],
+    ["route", function (p) { return ROUTES[p.route].name; }], ["who_could_act", function (p) { return ROUTES[p.route].who; }],
+    ["rank_by_number", "rank"], ["rank_by_share", "rank_share"], ["households", "households"],
+    ["homes_without_light", "unserved_hh"], ["share_without_light", "unserved_share"],
+    ["census_grid_share", "census_grid"], ["census_solar_share", "census_solar"], ["census_neither_share", "census_unserved"],
+    ["model_solar_share", "pred_solar"], ["model_grid_share", "pred_grid"], ["km_to_grid", "dist_grid"],
+    ["minutes_to_city", "travel_min"], ["wealth_index", "rwi"], ["night_lights", "ntl"], ["people_per_km2", "density"],
+    ["built_up_share", "built"], ["model_drivers", function (p) { return (p.drivers || []).join("; "); }],
+    ["check_first", function (p) { return p.checks && p.checks.length ? "yes" : "no"; }],
+    ["check_notes", function (p) { return (p.checks || []).join(" "); }],
+    ["map_link", function (p) { return location.href.split("#")[0] + "#layer=underserved&sector=" + p.id; }]
+  ];
+  function csvCell(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "number") return isFinite(v) ? String(v) : "";
+    return '"' + String(v).replace(/"/g, '""') + '"';
+  }
+  function downloadCsv() {
+    var list = priorityList();
+    var rows = [CSV_COLUMNS.map(function (c) { return c[0]; }).join(",")].concat(list.map(function (p, i) {
+      return CSV_COLUMNS.map(function (c) { return csvCell(typeof c[1] === "function" ? c[1](p, i) : p[c[1]]); }).join(",");
+    }));
+    var name = "rwanda_priority_sectors_" + (state.rank === "share" ? "by_share" : "by_number") +
+               (state.route === "all" ? "" : "_" + state.route) + ".csv";
+    var a = document.createElement("a");   // a BOM so Excel reads the names as UTF-8
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast("Saved " + list.length + " sectors to " + name);
+  }
+  $("btn-csv").addEventListener("click", downloadCsv);
+  var size = function (bytes) { return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + " MB" : Math.round(bytes / 1e3) + " KB"; };
+  $("files").innerHTML = D.downloads.map(function (f) {
+    return "<li><b>" + esc(f.name) + "</b><span>GeoTIFF, 0-1, ~1 km &middot; " + size(f.bytes) + ' &middot; <a href="' + f.url + '" download>Download</a> &middot; ' +
+           '<a href="' + f.meta_url + '" target="_blank" rel="noopener">Metadata</a></span></li>';
+  }).join("");
+  $("licence").innerHTML = "Licence: <b>CC BY-NC 4.0</b>. Free to use and share with credit, but not for commercial use, because the Meta wealth index it is built on is non-commercial. " +
+    "Companies: ask before using it to plan sales. Cite: " + esc(D.title) + ", OSEAS 2026.";
 
   // ---------------------------------------------------------- toast
   var toastTimer;
-  function toast(msg) {
-    var t = $("toast");
-    t.textContent = msg; t.classList.add("show");
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("show"); }, 4200);
+  function toast(msg, opts) {   // opts.ms: how long it stays (0 = until replaced); opts.close: a dismiss button
+    opts = opts || {};
+    var t = $("toast"), ms = opts.ms === undefined ? 4200 : opts.ms;
+    t.innerHTML = "<span>" + esc(msg) + "</span>" + (opts.close ? '<button aria-label="Dismiss message">' +
+      '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>' : "");
+    t.classList.toggle("has-close", !!opts.close);
+    t.classList.add("show");
+    if (opts.close) t.querySelector("button").addEventListener("click", hideToast);
+    clearTimeout(toastTimer);
+    if (ms) toastTimer = setTimeout(hideToast, ms);
   }
+  function hideToast() { clearTimeout(toastTimer); $("toast").classList.remove("show"); }
 
   // ---------------------------------------------------------- guided tour
   var STEPS = [
-    { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, so support can reach the places the market has missed. This short guide shows you around." },
+    { title: "Welcome", text: "This map shows where households in " + D.country + " still have neither grid electricity nor solar, and who could reach them: the grid company, solar companies already selling there, or funders where the solar market has not arrived. This short guide shows you around." },
     { el: function () { return $("legend"); }, title: "Read the colours",
-      text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the top 10 priority sectors." },
+      text: "The colours show one layer at a time. The legend explains them; on the underserved layer, darker means more households without light. Numbered pins mark the priority list." },
     { el: function () { return isMobile() ? $("btn-panel") : $("sec-layers"); }, title: "Choose what the map shows",
-      text: "Switch between the results and the six clues the model uses: night lights, population, wealth, distance to the grid, travel time and buildings. The legend, pins and details follow your choice." },
-    { el: function () { return $("map"); }, box: "center", title: "Tap a sector for details",
-      text: "Each sector shows its number for the current layer, how it compares with the rest of Rwanda, how homes are lit, and why the model scores it the way it does." },
+      text: "Switch between the results (homes without light, who should serve them, solar use) and the six clues the model uses. The legend, pins and details follow your choice." },
+    { card: true, el: function () { showTourSector(); $("info").scrollTop = 0; return $("info"); },
+      rect: function () { return rectInInfo([$("info").querySelector("header"), $("info").querySelector(".sec")]); },
+      title: "A sector up close",
+      text: function () { var p = props(state.selected); return "This is " + p.sector + " in " + p.district + " district. The big number belongs to the layer on the map, " +
+                                 "compared with the rest of Rwanda. Tap any sector to see the same details."; } },
+    { card: true, el: function () { showTourSector(); var secs = infoSections(["Who should serve these homes", "How sure are we"]);
+                                     if (secs.length) $("info").scrollTop = secs[0].offsetTop - $("info").querySelector("header").offsetHeight;
+                                     return $("info"); },
+      rect: function () { return rectInInfo(infoSections(["Who should serve these homes", "How sure are we"])); },
+      title: "Who should serve it, and how sure we are",
+      text: "Each sector says who could reach its unlit homes and when to check on the ground first. Found something different? Use \u201cReport a correction\u201d." },
     { el: function () { return $("search"); }, title: "Search", text: "Find any sector or district in Rwanda by name, or type coordinates such as -1.95, 30.06." },
     { el: function () { return $("btn-locate"); }, title: "Where am I?",
       text: "Find the sector you are standing in and see its overview. Your browser will ask for permission; your location stays on your device." },
     { el: function () { return isMobile() ? $("chip") : $("sec-top"); },
       title: function () { return isMobile() ? "Your current settings" : "Priority list"; },
-      text: function () { return isMobile() ? "This chip shows what the map is set to. Tap it, or the round button at the bottom, to change layers and settings, then go back to the map."
-                                             : "The 10 sectors with the most households without light. Click one to fly to it. Use it as a shortlist for field visits."; } },
+      text: function () { return isMobile() ? "This chip shows what the map is set to. Tap it, or the round button at the bottom, to change layers, the priority list and downloads, then go back to the map."
+                                             : "The sectors to look at first. Rank them by the number of homes without light or by their share, and keep one route only. Click one to fly to it; use it as a shortlist for field visits, and download it as a spreadsheet below."; } },
     { el: function () { return $("btn-help"); }, title: "You're ready", text: "Open this guide again any time with the question-mark button." }
   ];
-  var step = 0;
+  // The guide shows a real sector: the one open when it started, or else the top priority sector.
+  var step = 0, tourStart = null;
+  function showTourSector() {
+    var id = tourStart !== null ? tourStart : D.top[0];
+    if (state.selected !== id) select(id, { fly: true });
+  }
+  function infoSections(titles) {
+    return Array.prototype.filter.call($("info").querySelectorAll(".sec"), function (sec) {
+      var h = sec.querySelector("h3");
+      return h && titles.indexOf(h.textContent) >= 0;
+    });
+  }
+  function rectInInfo(els) {   // the box around els, cut to the visible part of the details card
+    var info = $("info").getBoundingClientRect(), b = null;
+    els.forEach(function (e) {
+      var r = e.getBoundingClientRect();
+      b = b ? { left: Math.min(b.left, r.left), top: Math.min(b.top, r.top), right: Math.max(b.right, r.right), bottom: Math.max(b.bottom, r.bottom) }
+            : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    });
+    if (!b) return info;
+    var top = Math.max(b.top, info.top), bottom = Math.min(b.bottom, info.bottom);
+    return { left: b.left, right: b.right, top: top, bottom: bottom, width: b.right - b.left, height: bottom - top };
+  }
   function placeTour() {
     var s = STEPS[step], spot = document.querySelector("#tour .spot"), card = document.querySelector("#tour .tcard");
+    document.body.classList.toggle("tour-card", !!s.card);   // before el(), so the details card can be measured
     var el = s.el ? s.el() : null;
     if (el && el.closest && el.closest("#panel")) el.scrollIntoView({ block: "nearest" });
     $("tour-title").textContent = typeof s.title === "function" ? s.title() : s.title;
     $("tour-text").textContent = typeof s.text === "function" ? s.text() : s.text;
     document.querySelector("#tour .dots").innerHTML = STEPS.map(function (_, i) { return '<i class="' + (i === step ? "on" : "") + '"></i>'; }).join("");
-    $("tour-back").style.visibility = step === 0 ? "hidden" : "visible";
+    $("tour-back").hidden = step === 0;
+    $("tour-skip").hidden = step === STEPS.length - 1;   // the last step's button already ends the guide
     $("tour-next").textContent = step === STEPS.length - 1 ? "Start exploring" : "Next";
     var vw = window.innerWidth, vh = window.innerHeight;
     if (isMobile()) {   // card at the bottom, or at the top when the highlighted part is low on the screen
-      var low = el && el.getClientRects().length > 0 && s.box !== "center" && el.getBoundingClientRect().top > vh * 0.5;
+      var low = s.card || (el && el.getClientRects().length > 0 && s.box !== "center" && el.getBoundingClientRect().top > vh * 0.5);
       card.style.top = low ? "max(12px, env(safe-area-inset-top))" : "auto";
       card.style.bottom = low ? "auto" : "max(16px, env(safe-area-inset-bottom))";
     } else {
       card.style.bottom = "auto";
     }
     if (el && el.getClientRects().length > 0) {
-      var r = el.getBoundingClientRect(), pad = 6;
+      var r = s.rect ? s.rect() : el.getBoundingClientRect(), pad = 6;
       if (s.box === "center") r = { left: vw / 2 - 90, top: vh / 2 - 60, width: 180, height: 120, right: vw / 2 + 90, bottom: vh / 2 + 60 };
       spot.style.display = "block";
       spot.style.left = (r.left - pad) + "px"; spot.style.top = (r.top - pad) + "px";
@@ -835,9 +1118,18 @@
   function openTour() {
     closeSettings();
     if (!isMobile()) document.body.classList.remove("panel-collapsed");
+    document.body.classList.add("touring");
+    tourStart = state.selected;
     step = 0; $("tour").classList.add("show"); placeTour(); $("tour-next").focus();
   }
-  function endTour() { $("tour").classList.remove("show"); store.set("osm-guide-done", "1"); }
+  function endTour() {
+    $("tour").classList.remove("show");
+    document.body.classList.remove("touring", "tour-card");
+    store.set("osm-guide-done", "1");
+    if (state.selected !== tourStart) {   // put back what was open before the guide showed its example
+      if (tourStart !== null) select(tourStart, { fly: true }); else { closeInfo(); showRwanda(); }
+    }
+  }
   $("tour-next").addEventListener("click", function () { if (step === STEPS.length - 1) endTour(); else { step++; placeTour(); } });
   $("tour-back").addEventListener("click", function () { if (step > 0) { step--; placeTour(); } });
   $("tour-skip").addEventListener("click", endTour);
@@ -854,7 +1146,7 @@
   mobileQuery.addEventListener("change", function () { closeSettings(); renderChip(); });
 
   // ---------------------------------------------------------- start
-  renderLayerList(); setBasemap(state.basemap); renderLegend(); renderChip(); syncPins();
+  renderLayerList(); setBasemap(state.basemap); renderTop(); applyOpacity(); renderLegend(); renderChip(); syncPins();
   initialView(0);
   window.addEventListener("load", function () { if (state.selected === null) { map.invalidateSize(); showRwanda(); } });
   if (!store.get("osm-guide-done")) setTimeout(openTour, 500);

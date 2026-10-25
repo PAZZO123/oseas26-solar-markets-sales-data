@@ -56,8 +56,10 @@ def use_system_certificates() -> None:
     truststore.inject_into_ssl()
 
 
-def cli_args(description: str) -> argparse.Namespace:
-    """Common command-line arguments for every pipeline stage."""
+def cli_args(description: str, flags: dict[str, str] | None = None) -> argparse.Namespace:
+    """Common command-line arguments for every pipeline stage, plus on/off `flags` {flag: help}."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="path to config.yml")
+    for flag, help_text in (flags or {}).items():
+        parser.add_argument(flag, action="store_true", help=help_text)
     return parser.parse_args()

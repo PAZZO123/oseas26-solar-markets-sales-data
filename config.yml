@@ -112,6 +112,24 @@ validation:
     grid_codes: [1]          # electricity
     missing_codes: [99]
 
+webmap:
+  # Who should serve a sector's unlit homes (docs/user-gaps.md). A sector is a grid job when at
+  # least grid_share_min of its homes use the grid (census) or people live within grid_km_max of
+  # a line on average (Gridfinder). Otherwise its solar market is "working" where the census
+  # solar share reaches solar_share_min (null = the national share) and "not yet arrived" below.
+  routes:
+    grid_share_min: 0.5
+    grid_km_max: 1.0
+    solar_share_min: null
+  # When a sector card says "check on the ground first": the census and the model disagree on its
+  # solar share by more than disagree_pp points, or the model is off by district_error_pp points
+  # or more in its district (reports/calibration_districts.csv).
+  confidence:
+    disagree_pp: 15
+    district_error_pp: 8
+  # Where "Report a correction" sends field findings (a GitHub issue form); null hides the button.
+  feedback_url: https://github.com/PAZZO123/oseas26-solar-markets-sales-data/issues/new?template=field_check.yml
+
 export:
   normalise_percentiles: [2, 98]
   # Pixels with fewer people than this are nodata in the penetration layer (parks, lakes).
