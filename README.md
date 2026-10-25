@@ -343,11 +343,10 @@ embedded) for desktop and mobile, published with GitHub Pages
 - **Take the data with you**: download every sector in the priority list as a CSV that opens in
   Excel (made in the browser, in list order, with a link back to each sector), or the two EAE
   GeoTIFF layers with their metadata. The licence (CC BY-NC 4.0) is stated next to them.
-- **How sure are we**: each sector card says "usual accuracy" or "check on the ground first",
-  with the reason (census and model disagree by more than 15 points, or the district is off by 8 or
-  more; thresholds in `config.yml`, `webmap.confidence`). Every model share shows its likely range
-  in percent, e.g. "20% solar, likely 12%–28%" (± the blocked cross-validation error: 8 points for
-  solar, 11 for grid). It also notes that DHS 2025 finds more
+- **How sure are we**: a sector card says "check on the ground first", with the reason, when the
+  census and the model disagree by more than 15 points or the district is off by 8 or more
+  (thresholds in `config.yml`, `webmap.confidence`). Accuracy figures are left out of the demo for
+  now. It also notes that DHS 2025 finds more
   solar than the 2022 census. "Report a correction" opens a GitHub issue form with the sector
   filled in, and a switch draws dashed borders on the sectors to check first.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of
@@ -359,7 +358,8 @@ embedded) for desktop and mobile, published with GitHub Pages
   when location is blocked, unavailable or the page is not secure (a phone opening
   `http://<computer-IP>:8777` gets no location; use the published https map there).
 - **Guided tour** on the first visit (remembered in the browser; the ? button reopens it). Its
-  buttons fit phones down to 320 px wide.
+  buttons fit phones down to 320 px wide. Two of its steps open a real sector card (the one
+  already open, or the top priority sector) to explain it, then the map goes back to how it was.
 - **Mobile**: search at the top, a summary chip of the current settings, the location button near
   the top, a full-screen settings screen with a back button, and a bottom sheet for details.
 - **Shareable links**: the address remembers the layer and sector, e.g.
