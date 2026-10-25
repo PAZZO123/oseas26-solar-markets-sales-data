@@ -177,7 +177,6 @@
   .sure.check { background: #fdf1e2; color: #8a4b00; }
   ul.checks { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); }
   ul.checks li { margin: 3px 0; }
-  a.linkbtn { color: var(--ink); text-decoration: none; display: inline-block; }
   .dash-key { width: 18px; height: 0; border-top: 2px dashed #8a4b00; flex: none; }
 
   /* ---------- mobile summary chip ---------- */
@@ -658,23 +657,10 @@
     return D.since ? "Solar has grown since 2022: the " + D.since.survey + " survey finds " + fmt(D.since.solar, "pct") +
       " of homes lit by solar nationally, against " + fmt(D.calibration.target_share, "pct") + " in the census." : "";
   }
-  function reportUrl(p) {   // a GitHub issue form with the sector filled in (field ids in .github/ISSUE_TEMPLATE/field_check.yml)
-    return D.feedback_url + (D.feedback_url.indexOf("?") < 0 ? "?" : "&") +
-      "title=" + encodeURIComponent("[Field check]: " + p.sector + " (" + p.district + ")") +
-      "&sector=" + encodeURIComponent(p.sector + ", " + p.district) + "&layer=" + encodeURIComponent(LAYERS[state.layer].name) +
-      "&link=" + encodeURIComponent(location.href.split("#")[0] + "#layer=" + state.layer + "&sector=" + p.id);
-  }
-  function sureSection(p) {
-    var check = p.checks && p.checks.length > 0;
-    return '<div class="sec"><h3>How sure are we</h3>' +
-      (check ? '<span class="sure check">Check on the ground first</span><ul class="checks">' +
-               p.checks.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul>" : "") +
-      '<p class="fine">Estimates from the 2022 census and satellite data. Use them to shortlist places to visit, not as final decisions. ' +
-      esc(sinceText()) + "</p>" +
-      '<div class="actions"><button class="linkbtn" id="btn-copy">Copy link to this sector</button>' +
-      (D.feedback_url ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(reportUrl(p)) + '">Report a correction</a>' : "") + "</div>" +
-      (D.feedback_url ? '<p class="fine">"Report a correction" opens a public GitHub form (you need a GitHub account). Please leave out names and phone numbers.</p>' : "") +
-      "</div>";
+  function sureSection(p) {   // only on the sectors to check on the ground first
+    if (!p.checks || !p.checks.length) return "";
+    return '<div class="sec"><h3>How sure are we</h3><span class="sure check">Check on the ground first</span><ul class="checks">' +
+      p.checks.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul></div>";
   }
   function renderInfo(id, here) {
     var p = props(id), l = LAYERS[state.layer];
@@ -745,7 +731,6 @@
     document.body.classList.add("info-open");
     $("info-close").addEventListener("click", closeInfo);
     $("info-handle").addEventListener("click", function () { $("info").classList.toggle("tall"); });
-    $("btn-copy").addEventListener("click", copyLink);
     $("info").querySelectorAll("tr.clue").forEach(function (tr) {
       var go = function () { setLayer(tr.dataset.key); };
       tr.addEventListener("click", go);
@@ -768,12 +753,6 @@
     var h = "layer=" + state.layer + (state.rank !== "count" ? "&rank=" + state.rank : "") +
             (state.route !== "all" ? "&route=" + state.route : "") + (state.selected !== null ? "&sector=" + state.selected : "");
     try { history.replaceState(null, "", "#" + h); } catch (e) { /* file:// in some browsers */ }
-  }
-  function copyLink() {
-    var url = location.href;
-    var done = function () { toast("Link copied"); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { prompt("Copy this link:", url); });
-    else prompt("Copy this link:", url);
   }
 
   // ---------------------------------------------------------- search
@@ -1040,8 +1019,8 @@
                                      if (secs.length) $("info").scrollTop = secs[0].offsetTop - $("info").querySelector("header").offsetHeight;
                                      return $("info"); },
       rect: function () { return rectInInfo(infoSections(["Who should serve these homes", "How sure are we"])); },
-      title: "Who should serve it, and how sure we are",
-      text: "Each sector says who could reach its unlit homes and when to check on the ground first. Found something different? Use \u201cReport a correction\u201d." },
+      title: "Who should serve it, and when to check first",
+      text: "Each sector says who could reach its unlit homes. Sectors with a dashed border also say why to check on the ground first." },
     { el: function () { return $("search"); }, title: "Search", text: "Find any sector or district in Rwanda by name, or type coordinates such as -1.95, 30.06." },
     { el: function () { return $("btn-locate"); }, title: "Where am I?",
       text: "Find the sector you are standing in and see its overview. Your browser will ask for permission; your location stays on your device." },

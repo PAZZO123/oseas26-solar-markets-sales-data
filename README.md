@@ -346,10 +346,10 @@ embedded) for desktop and mobile, published with GitHub Pages
   GeoTIFF layers with their metadata. The licence (CC BY-NC 4.0) is stated next to them.
 - **How sure are we**: a sector card says "check on the ground first", with the reason, when the
   census and the model disagree by more than 15 points or the district is off by 8 or more
-  (thresholds in `config.yml`, `webmap.confidence`). Accuracy figures are left out of the demo for
-  now. It also notes that DHS 2025 finds more
-  solar than the 2022 census. "Report a correction" opens a GitHub issue form with the sector
-  filled in, and a switch draws dashed borders on the sectors to check first.
+  (thresholds in `config.yml`, `webmap.confidence`); other sectors have no such section. Accuracy
+  figures are left out of the demo for now. A switch draws dashed borders on the sectors to check
+  first. The solar penetration card and "About this map" note that DHS 2025 finds more solar
+  than the 2022 census.
 - **Sector details follow the active layer**: its value, the Rwanda median sector and the share of
   sectors below it, how homes are lit (census 2022), the model estimate, the three SHAP drivers,
   and a table of every layer for that sector with its unit (click a row to switch the map to it).

@@ -134,8 +134,8 @@ sectors (CSV)". The file has 72 rows in the same order as the list.
 The data is from 2022, while the DHS 2025 survey finds solar in 19.6% of homes against 13.9% in
 the census. Field teams have no way to report what they find.
 
-**How it is filled** (`feat/webmap-confidence`). Every sector card has a "How sure are we"
-section near the top:
+**How it is filled** (`feat/webmap-confidence`). Each sector to check first has a "How sure are
+we" section near the top of its card:
 
 - **Check on the ground first**, with the reasons in plain words. A sector
   is flagged when the census and the model disagree on its solar share by more than 15 points,
@@ -148,8 +148,9 @@ section near the top:
   one commit brings them back. `model_errors()` still reads the errors from
   `reports/cv_results.csv`.
 - **Since 2022:** the DHS 2025 survey finds solar in 20% of homes nationally against 14% in the
-  census. The note also appears on the solar penetration card and in "About this map".
-- **Report a correction** opens a GitHub issue form (`.github/ISSUE_TEMPLATE/field_check.yml`)
+  census. The note appears on the solar penetration card and in "About this map".
+- **Report a correction** (taken off the card for the demo, with the "Copy link" button and the
+  general text that every card repeated; the form and `webmap.feedback_url` stay) opens a GitHub issue form (`.github/ISSUE_TEMPLATE/field_check.yml`)
   with the sector, layer and map link already filled in. The issue is public and needs a GitHub
   account, and the form asks people to leave out names and phone numbers.
 
