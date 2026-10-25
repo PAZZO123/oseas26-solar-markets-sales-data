@@ -193,11 +193,17 @@
   #tour.show { display: block; }
   #tour .shade { position: absolute; inset: 0; background: rgba(12,20,38,.55); }
   #tour .spot { position: absolute; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(12,20,38,.55); outline: 3px solid #fff; transition: all .25s; pointer-events: none; }
-  #tour .tcard { position: absolute; width: min(360px, calc(100% - 24px)); padding: 18px 18px 14px; }
+  #tour .tcard { position: absolute; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; padding: 16px 18px 14px; }
+  #tour .progress { margin: 0 0 8px; }
   #tour .tcard h2 { margin: 0 0 6px; font-size: 18px; }
   #tour .tcard p { margin: 0 0 12px; color: var(--ink-2); }
-  #tour .tnav { display: flex; align-items: center; gap: 8px; }
-  #tour .dots { display: flex; gap: 5px; margin-right: auto; }
+  /* buttons wrap rather than spill out of the card on narrow screens */
+  #tour .tnav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  #tour .tnav #tour-skip { margin-right: auto; }
+  #tour .btn { min-height: 40px; }
+  #tour .dots { display: flex; flex-wrap: wrap; gap: 5px; }
+  /* the guide sets an open details card aside so the parts it points at stay visible */
+  body.touring #info { display: none !important; }
   #tour .dots i { width: 7px; height: 7px; border-radius: 50%; background: #d3d7e0; }
   #tour .dots i.on { background: var(--accent); }
   .btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 600; white-space: nowrap; }
@@ -230,10 +236,14 @@
     #info .handle i { display: block; width: 40px; height: 5px; border-radius: 3px; background: #cfd3db; margin: 0 auto; }
     #info header { top: 0; }
     body.info-open #legend, body.info-open #btn-panel { display: none !important; }
+    body.info-open.touring #legend { display: block !important; }
+    body.info-open.touring #btn-panel { display: flex !important; }
     /* under the search box and left of the map buttons, so the details sheet never covers it */
     #toast { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 58px); left: 10px; right: 66px; width: auto; max-width: none; transform: translateY(-12px); }
     #toast.show { transform: none; }
     #tour .tcard { left: 12px !important; right: 12px; width: auto; }
+    #tour .btn { min-height: 44px; }
+    #tour .tnav .primary { flex: 1 1 auto; }   /* a full, easy-to-tap "Next" / "Start exploring" */
     .leaflet-control-attribution { font-size: 9px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -346,10 +356,10 @@
   <div class="shade"></div>
   <div class="spot"></div>
   <div class="tcard card">
+    <div class="progress"><div class="dots" aria-hidden="true"></div></div>
     <h2 id="tour-title"></h2>
     <p id="tour-text"></p>
     <div class="tnav">
-      <div class="dots" aria-hidden="true"></div>
       <button class="btn ghost" id="tour-skip">Skip</button>
       <button class="btn ghost" id="tour-back">Back</button>
       <button class="btn primary" id="tour-next">Next</button>
@@ -1060,7 +1070,8 @@
     $("tour-title").textContent = typeof s.title === "function" ? s.title() : s.title;
     $("tour-text").textContent = typeof s.text === "function" ? s.text() : s.text;
     document.querySelector("#tour .dots").innerHTML = STEPS.map(function (_, i) { return '<i class="' + (i === step ? "on" : "") + '"></i>'; }).join("");
-    $("tour-back").style.visibility = step === 0 ? "hidden" : "visible";
+    $("tour-back").hidden = step === 0;
+    $("tour-skip").hidden = step === STEPS.length - 1;   // the last step's button already ends the guide
     $("tour-next").textContent = step === STEPS.length - 1 ? "Start exploring" : "Next";
     var vw = window.innerWidth, vh = window.innerHeight;
     if (isMobile()) {   // card at the bottom, or at the top when the highlighted part is low on the screen
@@ -1095,9 +1106,10 @@
   function openTour() {
     closeSettings();
     if (!isMobile()) document.body.classList.remove("panel-collapsed");
+    document.body.classList.add("touring");
     step = 0; $("tour").classList.add("show"); placeTour(); $("tour-next").focus();
   }
-  function endTour() { $("tour").classList.remove("show"); store.set("osm-guide-done", "1"); }
+  function endTour() { $("tour").classList.remove("show"); document.body.classList.remove("touring"); store.set("osm-guide-done", "1"); }
   $("tour-next").addEventListener("click", function () { if (step === STEPS.length - 1) endTour(); else { step++; placeTour(); } });
   $("tour-back").addEventListener("click", function () { if (step > 0) { step--; placeTour(); } });
   $("tour-skip").addEventListener("click", endTour);

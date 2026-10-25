@@ -358,7 +358,8 @@ embedded) for desktop and mobile, published with GitHub Pages
   browser). It always answers: "Finding your location…" at once, then the sector, or what to do
   when location is blocked, unavailable or the page is not secure (a phone opening
   `http://<computer-IP>:8777` gets no location; use the published https map there).
-- **Guided tour** on the first visit (remembered in the browser; the ? button reopens it).
+- **Guided tour** on the first visit (remembered in the browser; the ? button reopens it). Its
+  buttons fit phones down to 320 px wide.
 - **Mobile**: search at the top, a summary chip of the current settings, the location button near
   the top, a full-screen settings screen with a back button, and a bottom sheet for details.
 - **Shareable links**: the address remembers the layer and sector, e.g.
