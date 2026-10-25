@@ -496,7 +496,7 @@ def add_user_fields(data: dict, cfg: dict) -> dict:
                            "solar_share_min": _num(rules.get("solar_share_min") or national)}
     data["downloads"] = layer_downloads(paths.outputs)
     data["since"] = survey_since(paths.reports)
-    data["errors_pp"] = model_errors(paths.reports)
+    data["errors_pp"] = model_errors(paths.reports)   # not shown yet: accuracy is left out of the demo
     data["confidence"] = dict(cfg["webmap"]["confidence"])
     data["feedback_url"] = cfg["webmap"].get("feedback_url")
     return data
